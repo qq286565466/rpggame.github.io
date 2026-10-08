@@ -479,6 +479,7 @@
     var range = p.range;
     var arc = p.arcWidth;
     var hot = !!(opts && opts.autoLock);
+    var tracking = !hot && !!(opts && opts.autoAim);
     ctx.save();
     ctx.translate(sp.x, sp.y);
     ctx.rotate(p.facing);
@@ -486,9 +487,13 @@
     ctx.moveTo(0, 0);
     ctx.arc(0, 0, range, -arc / 2, arc / 2);
     ctx.closePath();
-    ctx.fillStyle = hot ? 'rgba(150, 230, 255, 0.22)' : 'rgba(186, 210, 255, 0.12)';
+    ctx.fillStyle = hot ? 'rgba(150, 230, 255, 0.22)'
+      : tracking ? 'rgba(160, 220, 255, 0.16)'
+      : 'rgba(186, 210, 255, 0.12)';
     ctx.fill();
-    ctx.strokeStyle = hot ? 'rgba(220, 248, 255, 0.92)' : 'rgba(206, 224, 255, 0.62)';
+    ctx.strokeStyle = hot ? 'rgba(220, 248, 255, 0.92)'
+      : tracking ? 'rgba(180, 230, 255, 0.78)'
+      : 'rgba(206, 224, 255, 0.62)';
     ctx.lineWidth = hot ? 2 : 1.5;
     ctx.beginPath();
     ctx.arc(0, 0, range, -arc / 2, arc / 2);

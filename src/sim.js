@@ -1089,11 +1089,37 @@
     };
   };
 
+  /**
+   * 自动攻击选敌（纯逻辑，可在 Node 里单测）。
+   * - lockRange：转向/锁定半径（比刀长更大，方便提前面向逼近的怪）
+   * - inSwing：是否已进入普攻命中距离（才应真正挥砍）
+   */
+  function pickAutoTarget(world, player, lockRange) {
+    if (!world || !player) return null;
+    var maxR = lockRange == null ? Math.max(320, player.range * 3.6) : lockRange;
+    var best = null, bd = Infinity, i;
+    for (i = 0; i < world.enemies.length; i++) {
+      var e = world.enemies[i];
+      if (e.dying > 0 || e.spawnT > 0) continue;
+      var d = dist(player.x, player.y, e.x, e.y);
+      if (d > maxR + e.r || d >= bd) continue;
+      bd = d;
+      best = e;
+    }
+    if (!best) return null;
+    return {
+      enemy: best,
+      dist: bd,
+      inSwing: bd <= player.range + best.r
+    };
+  }
+
   SP.BIOMES = BIOMES;
   SP.BIOME_ORDER = BIOME_ORDER;
   SP.ENEMY_TYPES = ENEMY_TYPES;
   SP.deriveCharacter = deriveCharacter;
   SP.armorReduction = armorReduction;
   SP.xpForLevel = xpForLevel;
+  SP.pickAutoTarget = pickAutoTarget;
   SP.World = World;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
