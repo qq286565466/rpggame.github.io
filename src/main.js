@@ -141,6 +141,12 @@
       keys[k] = true;
       sound.resume();
 
+      /* ---- 登录页：Esc 可关掉更新日志等面板 ---- */
+      if (ui.screen === 'login') {
+        if (k === 'escape' && ui.isPanelOpen()) ui.closeAllPanels();
+        return;
+      }
+
       /* ---- 藏身处：走动 + 交互 + 功能按钮 ---- */
       if (ui.screen === 'hideout') {
         if (k === 'f' || k === ' ') { ui.interactHideout(); return; }
