@@ -28,7 +28,8 @@
   var stick = { active: false, x: 0, y: 0, id: null };
   var touchUi = false;
   var autoAtk = false;
-  var autoLock = false;
+  var autoLock = false;   // 已进入刀长，正在自动挥砍
+  var autoAim = false;    // 已锁定附近敌人（可能尚在刀长外，仅转向）
   var AUTO_KEY = 'spm_auto_atk';
 
   /* ------------------------------------------------------------------ 输入 */
@@ -318,21 +319,6 @@
     applyAutoButton();
   }
 
-  /** 挥砍能打到的最近活怪（中心距离不超过刀长 + 怪的半径）。 */
-  function nearestSwingTarget(p) {
-    if (!world) return null;
-    var best = null, bd = Infinity, i;
-    for (i = 0; i < world.enemies.length; i++) {
-      var e = world.enemies[i];
-      if (e.dying > 0 || e.spawnT > 0) continue;
-      var d = SP.dist(p.x, p.y, e.x, e.y);
-      if (d > p.range + e.r || d >= bd) continue;
-      bd = d;
-      best = e;
-    }
-    return best;
-  }
-
   function readInput() {
     var mx = 0, my = 0;
     if (keys['w'] || keys['arrowup']) my -= 1;
@@ -348,17 +334,21 @@
       var wy = input.mouseY - renderer.h / 2 + world.camera.y;
       input.aimAngle = Math.atan2(wy - world.player.y, wx - world.player.x);
     }
+    /* 自动攻击：较大半径内锁最近怪用于转向；进入刀长后才挥砍并瞬间对准。 */
     autoLock = false;
+    autoAim = false;
     if (autoAtk && world && world.player) {
-      var tgt = nearestSwingTarget(world.player);
-      if (tgt) {
+      var pick = SP.pickAutoTarget(world, world.player);
+      if (pick) {
+        var tgt = pick.enemy;
         input.aimAngle = Math.atan2(tgt.y - world.player.y, tgt.x - world.player.x);
-        autoLock = true;
+        autoAim = true;
+        autoLock = !!pick.inSwing;
       }
     }
     var out = {
       mx: SP.clamp(mx, -1, 1), my: SP.clamp(my, -1, 1),
-      aimAngle: (autoLock || input.hasMouse) ? input.aimAngle : undefined,
+      aimAngle: (autoAim || input.hasMouse) ? input.aimAngle : undefined,
       aimSnap: autoLock,
       attack: input.attack || autoLock,
       quake: input.quake, bless: input.bless, use: input.use, dash: input.dash,
@@ -472,6 +462,7 @@
     running = true;
     input.attack = false; input.quake = false; input.bless = false; input.use = false; input.dash = false;
     autoLock = false;
+    autoAim = false;
   }
 
   /** 一局结束（通关或阵亡）：结算入账，只执行一次 */
@@ -530,7 +521,7 @@
       world.updateVisuals(dt);
       if (running && (world.dead || world.cleared)) consumeEvents();
     }
-    renderer.draw(world, { autoAtk: autoAtk, autoLock: autoLock });
+    renderer.draw(world, { autoAtk: autoAtk, autoAim: autoAim, autoLock: autoLock });
     ui.updateHUD(world);
   }
 

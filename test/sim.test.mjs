@@ -430,6 +430,39 @@ test('帧率无关性：不同步长的移动距离接近', () => {
   assert.ok(Math.abs(da - db) / Math.max(da, db) < 0.08, `步长差异过大: ${da.toFixed(1)} vs ${db.toFixed(1)}`);
 });
 
+test('自动选敌：刀长外仍可锁定用于转向，刀长内才标 inSwing', () => {
+  const w = makeWorld({ seed: 11 });
+  w.enemies.length = 0;
+  const p = w.player;
+  const far = w.spawnEnemy('calf');
+  far.spawnT = 0; far.x = p.x + 220; far.y = p.y;
+  const pickFar = SP.pickAutoTarget(w, p);
+  assert.ok(pickFar, '刀长外的附近敌人应被锁定');
+  assert.equal(pickFar.enemy, far);
+  assert.equal(pickFar.inSwing, false, '刀长外不应进入挥砍');
+
+  const near = w.spawnEnemy('bat');
+  near.spawnT = 0; near.x = p.x + 50; near.y = p.y;
+  const pickNear = SP.pickAutoTarget(w, p);
+  assert.equal(pickNear.enemy, near, '应优先锁定更近的敌人');
+  assert.equal(pickNear.inSwing, true, '刀长内应进入挥砍');
+});
+
+test('自动选敌：忽略濒死与尚未现身的怪，超出锁敌半径则放弃', () => {
+  const w = makeWorld({ seed: 12 });
+  w.enemies.length = 0;
+  const p = w.player;
+  const dying = w.spawnEnemy('calf');
+  dying.spawnT = 0; dying.dying = 0.5; dying.x = p.x + 40; dying.y = p.y;
+  const spawning = w.spawnEnemy('calf');
+  spawning.spawnT = 0.4; spawning.x = p.x + 45; spawning.y = p.y;
+  assert.equal(SP.pickAutoTarget(w, p), null, '只有无效目标时应返回 null');
+
+  const remote = w.spawnEnemy('calf');
+  remote.spawnT = 0; remote.x = p.x + 900; remote.y = p.y;
+  assert.equal(SP.pickAutoTarget(w, p, 300), null, '超出锁敌半径不应锁定');
+});
+
 console.log('\n时空猪 · 战斗与副本逻辑测试\n' + out.join('\n'));
 console.log(`\n通过 ${pass} / ${pass + fail}` + (fail ? `  ✗ 失败 ${fail}` : '  ✓ 全部通过'));
 process.exit(fail ? 1 : 0);
