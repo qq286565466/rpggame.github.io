@@ -102,6 +102,40 @@
     background: linear-gradient(90deg, #ffd6ea, #c9b6ff 45%, #8fe4ff);
     -webkit-background-clip: text; background-clip: text; color: transparent; }
   .subtitle { text-align: center; font-size: 12px; color: var(--muted); letter-spacing: 1.5px; margin: -4px 0 2px; }
+  .version-row {
+    display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
+    margin: -2px 0 2px;
+  }
+  .version-badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 700; letter-spacing: 0.6px; color: #d7eeff;
+    background: rgba(40, 70, 110, .45); border: 1px solid rgba(127, 227, 255, .35);
+  }
+  .version-badge .vb-label { color: var(--muted); font-weight: 600; }
+  .btn-changelog {
+    padding: 4px 10px; font-size: 11.5px; border-radius: 999px;
+    background: rgba(255,255,255,.05); border-color: var(--line);
+  }
+  .changelog-list {
+    display: flex; flex-direction: column; gap: 14px; text-align: left;
+    max-height: min(62vh, 520px); overflow-y: auto; padding-right: 4px;
+  }
+  .changelog-list::-webkit-scrollbar { width: 7px; }
+  .changelog-list::-webkit-scrollbar-thumb { background: rgba(140, 120, 255, .35); border-radius: 4px; }
+  .cl-entry {
+    padding: 12px 12px 10px; border-radius: 12px;
+    background: rgba(16, 12, 28, .55); border: 1px solid var(--line);
+  }
+  .cl-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+  .cl-ver { font-size: 15px; font-weight: 800; color: var(--cyan); letter-spacing: 0.4px; }
+  .cl-date { font-size: 11.5px; color: var(--muted); }
+  .cl-title { width: 100%; font-size: 13px; font-weight: 700; color: var(--text); margin-top: -2px; }
+  .cl-items { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; line-height: 1.65; }
+  .cl-items li { margin: 2px 0; }
+  .help-foot {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line);
+  }
   .tabs { display: flex; gap: 5px; background: rgba(0, 0, 0, .3); padding: 4px; border-radius: 10px; }
   .tabs button { flex: 1; border: none; background: transparent; padding: 7px; border-radius: 7px; font-weight: 600; color: var(--muted); }
   .tabs button.on { background: linear-gradient(180deg, rgba(90, 70, 160, .85), rgba(50, 38, 96, .9)); color: var(--text); }
@@ -503,12 +537,13 @@
     .forge-layout { grid-template-columns: 1fr; max-height: none; }
     .forge-list { max-height: 220px; }
     .result-grid { grid-template-columns: 1fr 1fr; }
-    #panelBag, #panelForge, #panelPortal, #panelShop, #panelRecord, #panelHelp { align-items: stretch; padding: 0; }
+    #panelBag, #panelForge, #panelPortal, #panelShop, #panelRecord, #panelHelp, #panelChangelog { align-items: stretch; padding: 0; }
     #panelBag .modal, #panelForge .modal, #panelPortal .modal,
-    #panelShop .modal, #panelRecord .modal, #panelHelp .modal {
+    #panelShop .modal, #panelRecord .modal, #panelHelp .modal, #panelChangelog .modal {
       width: 100%; max-width: none; height: 100%; max-height: none; border-radius: 0;
       padding: calc(10px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
     }
+    .changelog-list { max-height: none; flex: 1; }
     .hud-tl { width: min(220px, 58vw); left: 8px; top: calc(8px + env(safe-area-inset-top)); }
     .hud-tr { right: 8px; top: calc(8px + env(safe-area-inset-top)); }
     .hud-timer { font-size: 18px; }
@@ -629,6 +664,10 @@
       <div class="panel auth-card" style="padding:20px;display:flex;flex-direction:column;gap:12px">
         <h1 class="title">时空猪</h1>
         <div class="subtitle">SPACE-TIME PIG · 科多兽远征</div>
+        <div class="version-row">
+          <span class="version-badge" id="loginVersion"><span class="vb-label">版本</span><span id="loginVersionNum">—</span></span>
+          <button type="button" class="ghost btn-changelog" id="btnLoginChangelog">更新日志</button>
+        </div>
         <div class="tabs">
           <button id="tabLogin" class="on">账号登录</button>
           <button id="tabReg">注册</button>
@@ -833,6 +872,10 @@
           <b>装备</b>：7 个部位、5 种品质、随机词条。强化每级 +7% 全属性；重铸保留词条种类重掷数值；
           分解与出售是背包清理的主要手段。悬浮任意装备可以看到与当前装备的逐项对比。
         </div>
+        <div class="help-foot">
+          <span class="version-badge"><span class="vb-label">版本</span><span id="helpVersionNum">—</span></span>
+          <button type="button" class="ghost tiny-btn" id="btnHelpChangelog">更新日志</button>
+        </div>
       </div>
     </div>
   </section>
@@ -922,11 +965,25 @@
     </div>
   </section>
 
+  <!-- 更新日志：挂在 app 根上，登录页与藏身处都能打开 -->
+  <div class="overlay" id="panelChangelog">
+    <div class="panel modal" style="width:min(560px,94vw);text-align:left;display:flex;flex-direction:column;max-height:min(86vh,720px)">
+      <div class="modal-head">
+        <h2 style="text-align:left">更新日志</h2>
+        <span class="tiny muted" id="changelogCurrent">当前 v—</span>
+        <span class="spacer"></span>
+        <button class="ghost tiny-btn" data-close="panelChangelog">关闭 (Esc)</button>
+      </div>
+      <div class="changelog-list" id="changelogList"></div>
+    </div>
+  </div>
+
   <div id="tooltip" class="tooltip hidden"></div>
   <div id="toast" class="toast hidden"></div>
 </div>
 
 <script src="src/util.js"></script>
+<script src="src/version.js"></script>
 <script src="src/items.js"></script>
 <script src="src/sim.js"></script>
 <script src="src/progress.js"></script>

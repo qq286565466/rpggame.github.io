@@ -196,6 +196,8 @@
       self.showLogin();
       self.setMsg('已退出登录。', true);
     });
+    $('#btnLoginChangelog').addEventListener('click', function () { self.openPanel('changelog'); });
+    $('#btnHelpChangelog').addEventListener('click', function () { self.openPanel('changelog'); });
 
     /* ---- 藏身处：功能按钮 ---- */
     $('#btnBag').addEventListener('click', function () { self.togglePanel('bag'); });
@@ -265,21 +267,33 @@
 
     this.setAuthMode('login');
     this.refreshLoginPreview();
+    this.applyVersionLabels();
     this.startIdleLoop();
     return this;
+  };
+
+  UI.prototype.applyVersionLabels = function () {
+    var ver = SP.VERSION || '—';
+    var loginNum = this.$('loginVersionNum');
+    var helpNum = this.$('helpVersionNum');
+    var cur = this.$('changelogCurrent');
+    if (loginNum) loginNum.textContent = 'v' + ver;
+    if (helpNum) helpNum.textContent = 'v' + ver;
+    if (cur) cur.textContent = '当前 v' + ver;
   };
 
   /* ------------------------------------------------------- 面板（弹窗）管理 */
   var PANEL_IDS = {
     bag: 'panelBag', portal: 'panelPortal', forge: 'panelForge',
-    shop: 'panelShop', record: 'panelRecord', help: 'panelHelp'
+    shop: 'panelShop', record: 'panelRecord', help: 'panelHelp',
+    changelog: 'panelChangelog'
   };
 
   UI.prototype.openPanel = function (key) {
     if (!PANEL_IDS[key]) return;
     var changed = this.activePanel !== key;
     this.closeAllPanels();
-    this.$('panel' + key.charAt(0).toUpperCase() + key.slice(1)).classList.add('active');
+    this.$(PANEL_IDS[key]).classList.add('active');
     this.activePanel = key;
     this.refreshPanel(key);
     if (changed) this.sound && this.sound.play('click');
@@ -309,6 +323,32 @@
     else if (key === 'forge') this.renderForge();
     else if (key === 'shop') this.renderShop();
     else if (key === 'record') this.renderRecord();
+    else if (key === 'changelog') this.renderChangelog();
+  };
+
+  UI.prototype.renderChangelog = function () {
+    var list = this.$('changelogList');
+    var entries = SP.CHANGELOG || [];
+    list.innerHTML = '';
+    this.applyVersionLabels();
+    if (!entries.length) {
+      list.innerHTML = '<div class="tiny muted">暂无更新记录。</div>';
+      return;
+    }
+    entries.forEach(function (entry) {
+      var box = el('article', 'cl-entry');
+      var items = (entry.items || []).map(function (line) {
+        return '<li>' + esc(line) + '</li>';
+      }).join('');
+      box.innerHTML =
+        '<div class="cl-head">' +
+        '<span class="cl-ver">v' + esc(entry.version) + '</span>' +
+        (entry.date ? '<span class="cl-date">' + esc(entry.date) + '</span>' : '') +
+        (entry.title ? '<div class="cl-title">' + esc(entry.title) + '</div>' : '') +
+        '</div>' +
+        (items ? '<ul class="cl-items">' + items + '</ul>' : '');
+      list.appendChild(box);
+    });
   };
 
   /** 藏身处里与 NPC 交互（由 main.js 在按 F / 点击 NPC 时调用） */
