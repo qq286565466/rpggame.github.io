@@ -253,7 +253,7 @@
       var t = ev.target;
       var node = t && t.nodeType === 1 ? t : (t && t.parentElement);
       if (!node || !node.closest || node.isConnected === false) return;
-      if (node.closest('.cell, .equip-slot, #bagActions, #forgeBody, .forge-row')) return;
+      if (node.closest('.cell, .equip-slot, #bagActions, #forgeBody, .forge-row, #tooltip')) return;
       self.hideTooltip();
       var inSheet = node.closest('#panelBag, #panelForge');
       if (!inSheet || !self.isPanelOpen()) return;
@@ -264,6 +264,12 @@
         self.renderBag(); self.renderEquip(); self.renderForge();
       }
     });
+
+    var tipEl = $('#tooltip');
+    if (tipEl) {
+      tipEl.addEventListener('click', function (ev) { ev.stopPropagation(); });
+      tipEl.addEventListener('wheel', function (ev) { ev.stopPropagation(); }, { passive: true });
+    }
 
     this.setAuthMode('login');
     this.refreshLoginPreview();
@@ -511,14 +517,14 @@
         self.iconHtml(it || slot) + '</div>' +
         '<div class="es-sub">' + (it ? I.power(it) : '空') + '</div>';
       if (it) {
-        row.addEventListener('mouseenter', function (ev) { self.showTooltip(it, ev, slot); });
-        row.addEventListener('mouseleave', function () { self.hideTooltip(); });
+        self.bindItemTooltip(row, it, slot);
         row.addEventListener('click', function (ev) {
           ev.stopPropagation();
           self.selUid = it.uid;
           self.renderBag();
           self.renderEquip();
           self.renderForge();
+          if (self.isTouchUi()) self.showTooltip(it, ev, slot);
         });
       } else {
         row.addEventListener('click', function (ev) {
@@ -678,12 +684,16 @@
         self.iconHtml(it) +
         '<span class="il">' + it.ilvl + '</span>' +
         (it.upgrade ? '<span class="up">+' + it.upgrade + '</span>' : '');
-      c.addEventListener('mouseenter', function (ev) { self.showTooltip(it, ev, it.slot); });
-      c.addEventListener('mouseleave', function () { self.hideTooltip(); });
+      self.bindItemTooltip(c, it, it.slot);
       c.addEventListener('click', function (ev) {
         ev.stopPropagation();
-        self.selUid = self.selUid === it.uid ? null : it.uid;
+        var next = self.selUid === it.uid ? null : it.uid;
+        self.selUid = next;
         self.renderBag(); self.renderEquip(); self.renderForge();
+        if (self.isTouchUi()) {
+          if (next) self.showTooltip(it, ev, it.slot);
+          else self.hideTooltip();
+        }
       });
       grid.appendChild(c);
     });
@@ -716,15 +726,81 @@
         face +
         '<span class="qty">' + n + '</span>' +
         '<span class="stk-name">' + stack.name + '</span>';
-      c.addEventListener('mouseenter', function (ev) { self.showStackTip(stack, n, ev); });
-      c.addEventListener('mouseleave', function () { self.hideTooltip(); });
+      c.addEventListener('mouseenter', function (ev) {
+        if (self.isTouchUi()) return;
+        self.showStackTip(stack, n, ev);
+      });
+      c.addEventListener('mouseleave', function () {
+        if (self.isTouchUi()) return;
+        self.hideTooltip();
+      });
       c.addEventListener('click', function (ev) {
         ev.stopPropagation();
-        self.bagPick = self.bagPick === stack.key ? null : stack.key;
+        var next = self.bagPick === stack.key ? null : stack.key;
+        self.bagPick = next;
         self.renderBag();
+        if (self.isTouchUi()) {
+          if (next) self.showStackTip(stack, n, ev);
+          else self.hideTooltip();
+        }
       });
       grid.appendChild(c);
     });
+  };
+
+  UI.prototype.isTouchUi = function () {
+    return !!(doc.documentElement.classList.contains('is-touch') ||
+      (global.matchMedia && global.matchMedia('(pointer: coarse)').matches));
+  };
+
+  /** 桌面悬停查看；触屏改由 click 固定展示，避免 mouseleave 一闪就没。 */
+  UI.prototype.bindItemTooltip = function (node, item, slot) {
+    var self = this;
+    node.addEventListener('mouseenter', function (ev) {
+      if (self.isTouchUi()) return;
+      self.showTooltip(item, ev, slot);
+    });
+    node.addEventListener('mouseleave', function () {
+      if (self.isTouchUi()) return;
+      self.hideTooltip();
+    });
+  };
+
+  /** 把提示框夹在可视区域内；内容过高时靠 max-height + 内部滚动。 */
+  UI.prototype.placeTooltip = function (ev) {
+    var tip = this.$('tooltip');
+    var pad = 8;
+    var vw = global.innerWidth || doc.documentElement.clientWidth || 360;
+    var vh = global.innerHeight || doc.documentElement.clientHeight || 640;
+    var compact = this.isTouchUi() || vw <= 780;
+    var maxH = Math.max(160, compact ? Math.min(vh * 0.7, vh - pad * 2) : vh - pad * 2);
+    tip.style.maxHeight = Math.round(maxH) + 'px';
+
+    // 先清位移再量，避免沿用上一次的 left/top 影响宽度计算
+    tip.style.left = '0px';
+    tip.style.top = '0px';
+    var rect = tip.getBoundingClientRect();
+    var w = rect.width, h = Math.min(rect.height, maxH);
+    var x, y;
+    var cx = ev && typeof ev.clientX === 'number' ? ev.clientX : vw / 2;
+    var cy = ev && typeof ev.clientY === 'number' ? ev.clientY : vh / 2;
+
+    if (compact) {
+      x = Math.max(pad, Math.min((vw - w) / 2, vw - w - pad));
+      y = cy + 14;
+      if (y + h > vh - pad) y = cy - h - 14;
+      if (y < pad) y = pad;
+      if (y + h > vh - pad) y = Math.max(pad, vh - h - pad);
+    } else {
+      x = cx + 16;
+      y = cy + 12;
+      if (x + w > vw - pad) x = cx - w - 14;
+      if (x < pad) x = pad;
+      if (y + h > vh - pad) y = Math.max(pad, vh - h - pad);
+      if (y < pad) y = pad;
+    }
+    tip.style.left = Math.round(x) + 'px';
+    tip.style.top = Math.round(y) + 'px';
   };
 
   UI.prototype.showStackTip = function (stack, count, ev) {
@@ -733,12 +809,7 @@
       '<div class="tt-sub">' + stack.kind + ' · 持有 ' + count + '</div>' +
       '<div class="tt-foot">' + stack.desc + '</div>';
     tip.classList.remove('hidden');
-    var rect = tip.getBoundingClientRect();
-    var x = ev.clientX + 16, y = ev.clientY + 12;
-    if (x + rect.width > global.innerWidth - 10) x = ev.clientX - rect.width - 14;
-    if (y + rect.height > global.innerHeight - 10) y = Math.max(8, global.innerHeight - rect.height - 10);
-    tip.style.left = x + 'px';
-    tip.style.top = y + 'px';
+    this.placeTooltip(ev);
   };
 
   UI.prototype.renderBagActions = function () {
@@ -854,15 +925,14 @@
 
     tip.innerHTML = html;
     tip.classList.remove('hidden');
-    var rect = tip.getBoundingClientRect();
-    var x = ev.clientX + 16, y = ev.clientY + 12;
-    if (x + rect.width > global.innerWidth - 10) x = ev.clientX - rect.width - 14;
-    if (y + rect.height > global.innerHeight - 10) y = Math.max(8, global.innerHeight - rect.height - 10);
-    tip.style.left = x + 'px';
-    tip.style.top = y + 'px';
+    this.placeTooltip(ev);
     void slotContext;
   };
-  UI.prototype.hideTooltip = function () { this.$('tooltip').classList.add('hidden'); };
+  UI.prototype.hideTooltip = function () {
+    var tip = this.$('tooltip');
+    tip.classList.add('hidden');
+    tip.style.maxHeight = '';
+  };
 
   /* ------------------------------------------------------------ 装备操作 */
   UI.prototype.actionEquip = function () {
