@@ -844,7 +844,9 @@
     clampArena(this, p);
     pushOutOfObstacles(this, p);
 
-    if (aim !== undefined && isFinite(aim)) p.facing = SP.turnToward(p.facing, aim, dt * 22);
+    if (aim !== undefined && isFinite(aim)) {
+      p.facing = input.aimSnap ? aim : SP.turnToward(p.facing, aim, dt * 22);
+    }
     else if (ml > 0.05) p.facing = SP.turnToward(p.facing, Math.atan2(my, mx), dt * 14);
 
     if (input.attack && p.swingT <= 0) this.tryAttack(p.facing);

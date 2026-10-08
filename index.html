@@ -429,6 +429,16 @@
   .loot-toast { display: flex; align-items: center; gap: 6px; font-size: 11.5px; padding: 4px 9px; border-radius: 8px; background: rgba(10, 8, 20, .8); border-left: 3px solid var(--r-common); animation: lootIn .3s ease; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   @keyframes lootIn { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
   .hud-bottom { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 10px; align-items: flex-end; }
+  .auto-toggle {
+    position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%);
+    display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px;
+    border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 1px; color: #c9c0ea;
+    background: rgba(16, 12, 28, .78); border: 1px solid rgba(160, 140, 220, .5);
+  }
+  .auto-toggle.on {
+    color: #e9fbff; border-color: #7fe3ff; background: rgba(28, 78, 108, .88);
+    box-shadow: 0 0 14px rgba(127, 227, 255, .35);
+  }
   .slot { position: relative; width: 64px; height: 64px; border-radius: 12px; overflow: hidden;
     background: linear-gradient(180deg, rgba(48, 38, 84, .9), rgba(20, 15, 36, .95));
     border: 1px solid var(--line-strong); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; user-select: none; }
@@ -538,6 +548,11 @@
     left: auto; right: calc(6px + env(safe-area-inset-right)); transform: none;
     bottom: calc(10px + env(safe-area-inset-bottom)); gap: 6px;
   }
+  html.is-touch .auto-toggle {
+    left: auto; right: calc(8px + env(safe-area-inset-right)); transform: none;
+    bottom: calc(78px + env(safe-area-inset-bottom)); min-height: 36px; padding: 0 12px;
+  }
+  html.is-touch .auto-toggle .key { display: none; }
   html.is-touch .slot { width: 52px; height: 56px; }
   html.is-touch .slot .sn { font-size: 9px; }
   @media (max-width: 430px) {
@@ -545,6 +560,7 @@
     html.is-touch .stick-knob { width: 36px; height: 36px; margin: -18px 0 0 -18px; }
     html.is-touch .action-btn { width: 48px; height: 52px; font-size: 10px; }
     html.is-touch .hud-bottom { gap: 4px; }
+    html.is-touch .auto-toggle { bottom: calc(64px + env(safe-area-inset-bottom)); }
     html.is-touch .slot { width: 40px; height: 46px; }
     html.is-touch .slot .sn { display: none; }
   }
@@ -807,8 +823,9 @@
           <button class="ghost tiny-btn" data-close="panelHelp">关闭 (Esc)</button>
         </div>
         <div class="help">
-          <b>操作</b>：<span class="key">WASD</span> 移动 · <span class="key">LMB</span> 攻击 · <span class="key">Q</span> 震击 ·
-          <span class="key">E</span> 赐福 · <span class="key">空格</span> 冲刺 · <span class="key">1</span> 牛排 · <span class="key">Esc</span> 暂停<br><br>
+          <b>操作</b>：<span class="key">WASD</span> 移动 · <span class="key">LMB</span> 攻击 · <span class="key">R</span> 自动攻击 · <span class="key">Q</span> 震击 ·
+          <span class="key">E</span> 赐福 · <span class="key">空格</span> 冲刺 · <span class="key">1</span> 牛排 · <span class="key">Esc</span> 暂停。
+          脚下扇形就是普攻范围；自动攻击打开后，会朝范围内最近的敌人挥砍。<br><br>
           <b>藏身处</b>：走到 NPC 面前按 <span class="key">F</span> 交互 —— 铁匠负责强化/重铸/分解，商人负责补给与神秘装备，
           时空传送门用来选择副本层级。背包 / 传送门 / 战绩 都可以用下方按钮或快捷键直接打开。<br><br>
           <b>副本</b>：刷够击杀配额后关底首领出现，击败即通关并解锁更深一层。
@@ -862,6 +879,7 @@
       <div class="combo" id="hudCombo"></div>
       <div class="banner" id="banner"></div>
 
+      <button type="button" id="btnAuto" class="auto-toggle" aria-pressed="false"><span class="key">R</span>自动</button>
       <div class="hud-bottom">
         <div class="slot" id="slotAtk"><span class="sk">LMB</span><svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18.6 2.6 9 12.2l2.8 2.8 9.6-9.6V2.6z" fill="rgba(180,220,255,.28)"/><path d="M6.4 15.2 8.8 17.6"/><path d="M3.2 20.8 6 18"/></svg><span class="sn">攻击</span></div>
         <div class="slot" id="slotQuake"><span class="sk">Q</span><svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="3.2" fill="rgba(127,227,255,.3)"/><path d="M12 3.4v3M12 17.6v3M3.4 12h3M17.6 12h3M6.2 6.2 8 8M18 16l-1.8-1.8M17.8 6.2 16 8M6 16l1.8-1.8"/></svg><span class="sn">震击</span><div class="cd"></div><div class="cdt"></div></div>

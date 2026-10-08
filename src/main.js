@@ -27,6 +27,9 @@
   var keys = {};
   var stick = { active: false, x: 0, y: 0, id: null };
   var touchUi = false;
+  var autoAtk = false;
+  var autoLock = false;
+  var AUTO_KEY = 'spm_auto_atk';
 
   /* ------------------------------------------------------------------ 输入 */
   function keyName(ev) { return (ev.key || '').toLowerCase(); }
@@ -123,6 +126,13 @@
     }
     bindStick();
     bindSkillButtons();
+    autoAtk = readAutoPref();
+    applyAutoButton();
+    var autoBtn = doc.getElementById('btnAuto');
+    if (autoBtn) autoBtn.addEventListener('click', function () {
+      sound.resume();
+      setAutoAtk(!autoAtk);
+    });
 
     global.addEventListener('keydown', function (ev) {
       var k = keyName(ev);
@@ -149,6 +159,7 @@
         if (k === '1') input.use = true;
         if (k === ' ' || k === 'shift') input.dash = true;
       }
+      if (k === 'r' && ui.screen === 'game') setAutoAtk(!autoAtk);
       if (k === 'escape' && running && !ui.isResultOpen()) togglePause();
       if (k === 'm') sound.setVolume(sound.volume > 0 ? 0 : 0.32);
     });
@@ -280,6 +291,42 @@
     return { mx: 0, my: 0 };
   }
 
+  function readAutoPref() {
+    var v = null;
+    try { v = global.localStorage.getItem(AUTO_KEY); } catch (e) {}
+    if (v === '1') return true;
+    if (v === '0') return false;
+    return touchUi;
+  }
+
+  function applyAutoButton() {
+    var btn = doc.getElementById('btnAuto');
+    if (!btn) return;
+    btn.classList.toggle('on', autoAtk);
+    btn.setAttribute('aria-pressed', autoAtk ? 'true' : 'false');
+  }
+
+  function setAutoAtk(on) {
+    autoAtk = !!on;
+    try { global.localStorage.setItem(AUTO_KEY, autoAtk ? '1' : '0'); } catch (e) {}
+    applyAutoButton();
+  }
+
+  /** 挥砍能打到的最近活怪（中心距离不超过刀长 + 怪的半径）。 */
+  function nearestSwingTarget(p) {
+    if (!world) return null;
+    var best = null, bd = Infinity, i;
+    for (i = 0; i < world.enemies.length; i++) {
+      var e = world.enemies[i];
+      if (e.dying > 0 || e.spawnT > 0) continue;
+      var d = SP.dist(p.x, p.y, e.x, e.y);
+      if (d > p.range + e.r || d >= bd) continue;
+      bd = d;
+      best = e;
+    }
+    return best;
+  }
+
   function readInput() {
     var mx = 0, my = 0;
     if (keys['w'] || keys['arrowup']) my -= 1;
@@ -295,10 +342,19 @@
       var wy = input.mouseY - renderer.h / 2 + world.camera.y;
       input.aimAngle = Math.atan2(wy - world.player.y, wx - world.player.x);
     }
+    autoLock = false;
+    if (autoAtk && world && world.player) {
+      var tgt = nearestSwingTarget(world.player);
+      if (tgt) {
+        input.aimAngle = Math.atan2(tgt.y - world.player.y, tgt.x - world.player.x);
+        autoLock = true;
+      }
+    }
     var out = {
       mx: SP.clamp(mx, -1, 1), my: SP.clamp(my, -1, 1),
-      aimAngle: input.hasMouse ? input.aimAngle : undefined,
-      attack: input.attack,
+      aimAngle: (autoLock || input.hasMouse) ? input.aimAngle : undefined,
+      aimSnap: autoLock,
+      attack: input.attack || autoLock,
       quake: input.quake, bless: input.bless, use: input.use, dash: input.dash,
       viewW: renderer ? renderer.w : 0, viewH: renderer ? renderer.h : 0
     };
@@ -409,6 +465,7 @@
     paused = false;
     running = true;
     input.attack = false; input.quake = false; input.bless = false; input.use = false; input.dash = false;
+    autoLock = false;
   }
 
   /** 一局结束（通关或阵亡）：结算入账，只执行一次 */
@@ -467,7 +524,7 @@
       world.updateVisuals(dt);
       if (running && (world.dead || world.cleared)) consumeEvents();
     }
-    renderer.draw(world, {});
+    renderer.draw(world, { autoAtk: autoAtk, autoLock: autoLock });
     ui.updateHUD(world);
   }
 
