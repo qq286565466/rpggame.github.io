@@ -1,0 +1,15 @@
+{
+  "name": "space-time-pig",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "时空猪 · 科多兽远征 —— 纯前端单机动作 RPG（刷装备养成，零依赖）",
+  "scripts": {
+    "dev": "node tools/serve.mjs 4321",
+    "test": "node test/items.test.mjs && node test/sim.test.mjs && node test/progress.test.mjs && node test/hideout.test.mjs",
+    "balance": "node tools/progression.mjs 30 300",
+    "build": "node tools/build.mjs",
+    "e2e": "node tools/e2e.mjs",
+    "shot": "node tools/cdp.mjs"
+  }
+}
