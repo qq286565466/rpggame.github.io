@@ -139,13 +139,15 @@ const PORT = 18765 + Math.floor(Math.random() * 200);
 let serverProc = null;
 
 async function startServer() {
-  serverProc = spawn(process.execPath, ['tools/online-server.mjs', String(PORT)], {
+  serverProc = spawn(process.execPath, ['server/index.mjs', String(PORT)], {
     cwd: root, stdio: ['ignore', 'pipe', 'pipe']
   });
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('server start timeout')), 4000);
     const onData = (buf) => {
-      if (String(buf).includes('HTTP')) { clearTimeout(t); resolve(); }
+      if (String(buf).includes('联机服务端') || String(buf).includes('HTTP')) {
+        clearTimeout(t); resolve();
+      }
     };
     serverProc.stdout.on('data', onData);
     serverProc.stderr.on('data', onData);
@@ -166,8 +168,8 @@ function stopServer() {
 await test('联机服务器：大厅现身、组队、发车', async () => {
   await startServer();
   try {
-    const api = await new Promise((resolve, reject) => {
-      http.get('http://127.0.0.1:' + PORT + '/api/online', (res) => {
+    const getJson = (path) => new Promise((resolve, reject) => {
+      http.get('http://127.0.0.1:' + PORT + path, (res) => {
         let body = '';
         res.on('data', (c) => { body += c; });
         res.on('end', () => {
@@ -175,7 +177,12 @@ await test('联机服务器：大厅现身、组队、发车', async () => {
         });
       }).on('error', reject);
     });
+    const api = await getJson('/api/status');
     assert.equal(api.ok, true);
+    assert.ok(api.version);
+    const rooms = await getJson('/api/rooms');
+    assert.equal(rooms.ok, true);
+    assert.ok(Array.isArray(rooms.rooms));
 
     const a = await openClient('ws://127.0.0.1:' + PORT + '/ws', { name: '甲', level: 10, x: 200, y: 300 });
     const welcomeA = await waitMsg(a, (m) => m.t === 'welcome');
@@ -186,6 +193,10 @@ await test('联机服务器：大厅现身、组队、发车', async () => {
     const welcomeB = await waitMsg(b, (m) => m.t === 'welcome');
     assert.ok(welcomeB.peers.some((p) => p.id === welcomeA.id), '乙应看到甲');
     await joinAPromise;
+
+    a.send(JSON.stringify({ t: 'ping', ts: 12345 }));
+    const pong = await waitMsg(a, (m) => m.t === 'pong');
+    assert.equal(pong.ts, 12345);
 
     a.send(JSON.stringify({ t: 'hub_pos', x: 220, y: 310, facing: 0.5, walkPhase: 1, level: 10 }));
     const posB = await waitMsg(b, (m) => m.t === 'hub_pos' && m.id === welcomeA.id);

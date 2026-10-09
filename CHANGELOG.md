@@ -2,6 +2,14 @@
 
 游戏内「更新日志」面板与本文件同步。版本号以 `package.json` / `src/version.js` 为准。
 
+## 2.11.1 — 2026-10-09
+
+**独立联机服务端**
+
+- 联机逻辑拆为 `server/` 服务端：HTTP 静态站 + WebSocket 大厅 + `/api/status`·`rooms`
+- 服务端心跳与超时清理；客户端应用层 ping/pong 与断线自动重连
+- `npm run online` / `npm run server` 启动；公网部署说明见 `server/README.md`
+
 ## 2.11.0 — 2026-10-09
 
 **多人联机 · 共享藏身处与组队副本**
