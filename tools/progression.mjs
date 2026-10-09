@@ -161,6 +161,8 @@ for (let run = 1; run <= RUNS; run++) {
 
 const wall = Date.now() - t0;
 const clears = rows.filter((r) => r.cleared).length;
+const clearRate = clears / RUNS;
+const deepest = rows.reduce((a, r) => Math.max(a, SP.BIOMES[r.biome].tier * 1000 + r.floor), 0);
 console.log('─'.repeat(96));
 console.log(`共 ${RUNS} 局，通关 ${clears}，阵亡 ${RUNS - clears}`);
 console.log(`最终角色：等级 ${ch.level}，pig-coin ${ch.coins}，alpha-stone ${ch.stones}，强化石 ${ch.materials.up}，重铸石 ${ch.materials.re}`);
@@ -171,3 +173,42 @@ console.log(`最终装备：` + I.EQUIP_SLOTS.map((s) => {
 console.log(`区域进度：` + SP.BIOME_ORDER.map((b) => `${SP.BIOMES[b].name} ${P.clearedFloor(ch, b)} 层`).join(' · '));
 console.log(`累计击杀 ${ch.stats.kills}，获得装备 ${ch.stats.lootFound} 件`);
 console.log(`模拟墙钟耗时 ${wall} ms（${RUNS} 局，单局约 ${(wall / RUNS).toFixed(0)} ms）`);
+
+/* --------------------------------------------------------------- 平衡基线断言
+ * 2.8.2 的旧曲线（怪物纯二次成长）会让机器人卡死在巢穴第 1 层：
+ * 20 局定层推进里装备均等从第 9 局到第 20 局一直是 7.6，第 13 局起连续阵亡。
+ * 这里把「主线必须能推进」固化成断言，避免以后改数值时又悄悄退回去。
+ */
+const problems = [];
+if (clearRate < 0.5) {
+  problems.push(`通关率只有 ${(clearRate * 100).toFixed(0)}%（要求 ≥ 50%）：难度曲线过陡或掉落跟不上`);
+}
+if (P.clearedFloor(ch, 'cave') < 3) {
+  problems.push(`洞窟只推到第 ${P.clearedFloor(ch, 'cave')} 层（要求 ≥ 3）：中期存在硬墙`);
+}
+/* 终局与养成断言只在跑够局数时判定：短程试跑（e2e 用 10 局）本来就到不了巢穴 */
+const longRun = RUNS >= 20;
+if (longRun && P.clearedFloor(ch, 'nest') < 3) {
+  problems.push(`巢穴只推到第 ${P.clearedFloor(ch, 'nest')} 层（要求 ≥ 3）：终局区域推不动（旧版就是卡在这里）`);
+}
+const avgUpgrade = I.EQUIP_SLOTS.reduce((a, s) => a + (ch.equipped[s] ? (ch.equipped[s].upgrade || 0) : 0), 0) / I.EQUIP_SLOTS.length;
+if (longRun && avgUpgrade < 1) {
+  problems.push(`平均强化等级只有 ${avgUpgrade.toFixed(1)}（要求 ≥ 1）：金币收入或强化成本失衡，金币变死资源`);
+}
+const gearAvg = I.EQUIP_SLOTS.reduce((a, s) => a + (ch.equipped[s] ? ch.equipped[s].ilvl : 0), 0) / I.EQUIP_SLOTS.length;
+/* 允许落后 2 级：换装是渐进的，机器人也会带着一两件旧装备先踩进新层 */
+if (longRun && P.clearedFloor(ch, 'nest') > 2 && gearAvg < P.clearedFloor(ch, 'nest') - 2) {
+  problems.push(`装备均等 ${gearAvg.toFixed(1)} 落后巢穴层数 ${P.clearedFloor(ch, 'nest')} 超过 2 级：掉落 ilvl 与层数脱钩`);
+}
+const perRunMs = wall / RUNS;
+if (perRunMs > 400) {
+  problems.push(`单局模拟 ${perRunMs.toFixed(0)} ms（要求 ≤ 400ms）：战斗结算变重了，检查实体数量增长`);
+}
+if (problems.length) {
+  console.error('\n✗ 平衡基线未达标：');
+  problems.forEach((p) => console.error('  · ' + p));
+  process.exitCode = 1;
+} else {
+  console.log(`\n✓ 平衡基线通过：通关率 ${(clearRate * 100).toFixed(0)}%，` +
+    `深度 巢穴 ${P.clearedFloor(ch, 'nest')} 层，装备均等 ilvl ${gearAvg.toFixed(1)}，平均强化 +${avgUpgrade.toFixed(1)}`);
+}

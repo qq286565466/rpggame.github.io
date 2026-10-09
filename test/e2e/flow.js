@@ -80,6 +80,13 @@
       $('shopBody').children.length + ' 个商品');
     tap('Escape'); await wait(100);
 
+    /* 商店里可以用金币换材料（金币/石头两种资源互相补位） */
+    const shopRowsTxt = [...$('shopBody').querySelectorAll('.shop-item')].map((r) => r.textContent);
+    expect('商店提供金币换强化石/重铸石的出口',
+      shopRowsTxt.some((t) => t.includes('强化石 × 5（金币）')) &&
+      shopRowsTxt.some((t) => t.includes('重铸石 × 2（金币）')),
+      shopRowsTxt.join(' | '));
+
     expect('走到传送门按 F 打开层级选择', (await goTo('portal', 'portal')) &&
       document.querySelectorAll('#biomeList .biome-item').length === 4,
       document.querySelectorAll('#biomeList .biome-item').length + ' 个区域');
@@ -96,6 +103,16 @@
     /* 5) 功能按钮：背包（含装备与属性） */
     $('btnBag').click();
     expect('背包按钮打开背包面板', await waitFor(() => panel('bag'), 1500), game.ui.activePanel);
+
+    /* 面板打开时，F / 空格不应把面板换成身边 NPC 的界面 */
+    const hNear = hideout();
+    const blacksmith = hNear.npcByKey('blacksmith');
+    hNear.player.x = blacksmith.x + 58; hNear.player.y = blacksmith.y;
+    await waitFor(() => hNear.nearby && hNear.nearby.key === 'blacksmith', 1500);
+    tap(' ');
+    tap('f');
+    await wait(150);
+    expect('面板打开时空格/F 不会替换成 NPC 界面', panel('bag') && game.ui.activePanel === 'bag', game.ui.activePanel);
     expect('背包面板里同时有装备栏与属性', $('panelBag').querySelector('#equipSlots').children.length === 7 &&
       $('panelBag').querySelector('#statList').textContent.includes('攻击力'),
       document.querySelectorAll('#equipSlots .equip-slot').length + ' 槽位');
@@ -202,6 +219,15 @@
       w ? w.biome.name + ' ' + w.floor + ' 层 · mlvl ' + w.mlvl : '无');
     expect('进本后所有面板已关闭', !game.ui.isPanelOpen(), game.ui.activePanel);
     expect('副本 HUD 显示清剿进度', $('hudQuotaText').textContent.includes('/'), $('hudQuotaText').textContent);
+
+    /* 10b) HUD 不能吞掉鼠标：否则左上/右上的信息条下方按左键不攻击 */
+    const pe = (sel) => getComputedStyle(document.querySelector(sel)).pointerEvents;
+    expect('战斗 HUD 信息条不拦截鼠标（pointer-events: none）',
+      pe('#screen-game .hud-tl') === 'none' && pe('#screen-game .hud-tr') === 'none' && pe('#bossBar') === 'none',
+      `hud-tl=${pe('#screen-game .hud-tl')} hud-tr=${pe('#screen-game .hud-tr')} bossBar=${pe('#bossBar')}`);
+    expect('技能钮与自动按钮仍然可点（pointer-events: auto）',
+      pe('#slotAtk') === 'auto' && pe('#btnAuto') === 'auto',
+      `slotAtk=${pe('#slotAtk')} btnAuto=${pe('#btnAuto')}`);
 
     /* 11) 真实鼠标攻击 */
     w.enemies.length = 0;

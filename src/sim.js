@@ -175,10 +175,16 @@
     };
   }
 
-  /** 护甲减伤：随怪物等级提升而衰减，避免高等级时护甲无限强 */
+  /**
+   * 护甲减伤。
+   * 旧式 armor/(armor + 60 + 7·mlvl) 要把减伤顶到上限需要 3×(60+7·mlvl) 护甲：
+   * mlvl 20 要 600、mlvl 30 要 810，而实测 26 级满装只有 59 点 —— 公式实际被钳在
+   * 恒定的 ~50%，"堆护甲"这条唯一的中期对策形同虚设。
+   * 现在降低分母的等级项并把上限收到 70%，让护甲随装备等级稳定变强、也永远值得堆。
+   */
   function armorReduction(armor, mlvl) {
     if (armor <= 0) return 0;
-    return Math.min(0.75, armor / (armor + 60 + 7 * mlvl));
+    return Math.min(0.70, armor / (armor + 40 + 4 * mlvl));
   }
 
   /* -------------------------------------------------------------- 场景障碍物 */
@@ -382,16 +388,37 @@
 
   /* --------------------------------------------------------------- 刷怪 */
   /**
-   * 难度曲线。这里刻意使用「二次」成长而不是线性：
-   * 掉落 ilvl 与怪物等级同步上涨，而玩家攻击力 = 等级 + 装备 + 强化，是叠加成长的，
-   * 若怪物只按线性变强，越往深层反而越轻松（实测过：机器人能一路平推 17 层不死）。
-   * 二次项保证越深越吃装备，从而形成真正的「装备门槛」。
+   * 难度曲线。
+   *
+   * 历史：2.0 用过纯二次成长（1 + 0.30m + 0.035m²）来制造「装备门槛」。
+   * 但玩家的生命 / 攻击 = 等级（线性）+ 装备（线性）+ 强化（线性），而装备等级
+   * 又只能由已通关层数决定 —— 两边一旦脱钩，卡关就再也没有出口：
+   * 实测 20 局定层推进里，装备均等从第 9 局到第 20 局一直是 7.6，
+   * 而 mlvl 20 的幼魔一击 160（可挨 10 下 = 场上 8~12 只 1~2 秒内秒杀）。
+   *
+   * 现在改为「次线性」：二次项换成 1.6 次幂，并让它在中层以后收敛。
+   * 越深依然越吃装备，但差距是"需要补装备"，不是"数学上打不过"。
    */
+  var SCALE_CAP_MLVL = 60;   // 超过此怪物等级后成长按上限继续，避免无尽层彻底失控
+
+  function growth(m, lin, pow, quad) {
+    var c = Math.min(m, SCALE_CAP_MLVL);
+    return 1 + lin * m + pow * Math.pow(c, 1.6) + quad * c * c;
+  }
+
+  /** 传奇层软上限：从这一层开始，怪物额外按指数变强 */
+  var ENDLESS_FROM = 20;
+  function endlessMul(floor) {
+    return Math.pow(1.03, Math.max(0, floor - ENDLESS_FROM));
+  }
+
   World.prototype.scaling = function () {
-    var m = this.mlvl;
+    var m = this.mlvl, end = endlessMul(this.floor);
     return {
-      hp: 1 + 0.30 * m + 0.035 * m * m,
-      dmg: 1 + 0.25 * m + 0.030 * m * m,
+      /* 血量成长更快：深层怪不会被"秒清"，刷够配额需要真正打过一轮 */
+      hp: growth(m, 0.30, 0.022, 0.0018) * end,
+      /* 伤害线性项明显抬高：玩家护甲与生命是线性成长，二次项不足以压住 */
+      dmg: growth(m, 0.14, 0.030, 0.0030) * end,
       speed: Math.min(2.3, 1 + 0.035 * m)
     };
   };
@@ -399,7 +426,7 @@
   /** 首领血量单独一条更平缓的曲线，避免单场首领战拖到一分钟以上 */
   World.prototype.bossHpMul = function () {
     var m = this.mlvl;
-    return 1 + 0.30 * m + 0.014 * m * m;
+    return 1 + 0.25 * m + 0.004 * Math.pow(Math.min(m, SCALE_CAP_MLVL), 1.6);
   };
 
   World.prototype.spawnEnemy = function (key, opts) {
@@ -565,13 +592,23 @@
     return dealt;
   };
 
+  /**
+   * 掉落。设计目标：卡关时每一局都要有可见进展，而不是纯靠运气。
+   *   - 精英必掉、首领必掉多件（原来精英只有 55% 概率）
+   *   - 普通怪 22% 起步，并且「连续 N 只没掉装备」后逐步保底
+   *   - ilvl 收敛在 mlvl 附近，避免掉落与当前难度脱钩
+   */
   World.prototype.rollLoot = function (e) {
     var p = this.player;
-    var ilvl = Math.max(1, this.mlvl + Math.round(this.rng.range(-1, 2)));
-    var chance = e.boss ? 1 : (e.elite ? 0.55 : 0.16);
+    var ilvl = Math.max(1, this.mlvl + Math.round(this.rng.range(-1, 1)));
+    var chance = e.boss ? 1 : (e.elite ? 1 : 0.22);
     var count = e.boss ? 3 + (e.elite ? 1 : 0) : (e.elite ? 1 : 0);
     if (e.elite && this.hasUnique('hunter')) count += 1;
+    // 保底：久未掉装备时提高本次概率，避免长时间空手而归
+    if (!e.boss && !e.elite) chance += Math.min(0.5, 0.12 * (this.noLootStreak || 0));
     if (this.rng() < chance) count += 1;
+    if (count > 0) this.noLootStreak = 0;
+    else this.noLootStreak = (this.noLootStreak || 0) + 1;
     for (var i = 0; i < count; i++) {
       // 首领第一件保底稀有以上
       var bias = (e.boss ? 0.35 : 0) + (e.elite ? 0.15 : 0) + this.floor * 0.012;
@@ -604,7 +641,9 @@
     this.addXp(e.xp);
 
     // 吸血改为按造成伤害计算，这里只处理击杀回血类的独特效果
-    var coins = Math.max(1, Math.round(e.coin * (1 + p.greed)));
+    // 金币随层数温和放大：强化是长线金币消耗，收入必须跟得上，否则金币会变死资源
+    var coinScale = 1 + 0.10 * this.mlvl + (e.boss ? 2.5 : 0);
+    var coins = Math.max(1, Math.round(e.coin * coinScale * (1 + p.greed)));
     this.pickups.push({
       x: e.x + this.rng.range(-14, 14), y: e.y + this.rng.range(-14, 14),
       kind: 'coin', value: coins, life: 30, r: 11, bob: this.rng() * TAU, vx: 0, vy: 0

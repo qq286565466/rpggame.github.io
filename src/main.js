@@ -135,12 +135,29 @@
       setAutoAtk(!autoAtk);
     });
 
+    /* 焦点在输入控件 / 按钮上时，方向键与空格是这一控件的键盘操作
+       （传送门层数滑块、面板里的按钮），游戏不能抢走。 */
+    function isUiFocus(ev) {
+      var t = ev.target;
+      if (!t || t === doc.body || t === doc.documentElement) return false;
+      var tag = (t.tagName || '').toUpperCase();
+      return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'BUTTON' ||
+        tag === 'A' || !!t.isContentEditable;
+    }
+
     global.addEventListener('keydown', function (ev) {
       var k = keyName(ev);
-      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].indexOf(k) >= 0) ev.preventDefault();
+      var uiFocus = isUiFocus(ev);
+      if (!uiFocus &&
+        ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].indexOf(k) >= 0) {
+        ev.preventDefault();
+      }
       if (keys[k]) return;
       keys[k] = true;
       sound.resume();
+
+      /* 焦点在控件里：让浏览器完成它的默认行为，不当作游戏按键 */
+      if (uiFocus && k !== 'escape') return;
 
       /* ---- 登录页：Esc 可关掉更新日志等面板 ---- */
       if (ui.screen === 'login') {
@@ -150,7 +167,12 @@
 
       /* ---- 藏身处：走动 + 交互 + 功能按钮 ---- */
       if (ui.screen === 'hideout') {
-        if (k === 'f' || k === ' ') { ui.interactHideout(); return; }
+        /* 面板打开时 F / 空格不再触发场景交互：否则站在铁匠旁按空格，
+           会把当前面板直接换成铁匠铺（面板在玩家眼皮底下被替换） */
+        if (k === 'f' || k === ' ') {
+          if (!ui.isPanelOpen()) ui.interactHideout();
+          return;
+        }
         if (k === 'b') { ui.togglePanel('bag'); return; }
         if (k === 'p') { ui.togglePanel('portal'); return; }
         if (k === 'v') { ui.togglePanel('record'); return; }
@@ -588,6 +610,9 @@
         ch.coins = 4200; ch.stones = 48;
         ch.materials.up = 180; ch.materials.re = 55; ch.steaks = 5;
       }
+
+      /* 默认让机器人接管操作，画面稳定可复现；#dev-over 需要真实结算所以交还给玩家 */
+      demo = hash !== 'dev-over';
 
       if (hash.indexOf('dev-hub') === 0) {
         var hubCh = SP.Accounts.current.character;
