@@ -158,6 +158,8 @@
     this.bagPick = null;    // 材料或消耗品格子的 key
     this.floorPick = { camp: 0, forest: 0, cave: 0, nest: 0 };
     this.lootFeed = [];
+    this.bestiaryBiome = 'camp';
+    this.bestiarySel = null;
   }
 
   UI.prototype.init = function (hooks) {
@@ -203,6 +205,7 @@
     $('#btnBag').addEventListener('click', function () { self.togglePanel('bag'); });
     $('#btnPortal').addEventListener('click', function () { self.togglePanel('portal'); });
     $('#btnRecord').addEventListener('click', function () { self.togglePanel('record'); });
+    $('#btnBestiary').addEventListener('click', function () { self.togglePanel('bestiary'); });
     $('#btnHelp').addEventListener('click', function () { self.togglePanel('help'); });
 
     /* ---- 面板：关闭按钮 / 点遮罩关闭 ---- */
@@ -291,8 +294,8 @@
   /* ------------------------------------------------------- 面板（弹窗）管理 */
   var PANEL_IDS = {
     bag: 'panelBag', portal: 'panelPortal', forge: 'panelForge',
-    shop: 'panelShop', record: 'panelRecord', help: 'panelHelp',
-    changelog: 'panelChangelog'
+    shop: 'panelShop', record: 'panelRecord', bestiary: 'panelBestiary',
+    help: 'panelHelp', changelog: 'panelChangelog'
   };
 
   UI.prototype.openPanel = function (key) {
@@ -329,6 +332,7 @@
     else if (key === 'forge') this.renderForge();
     else if (key === 'shop') this.renderShop();
     else if (key === 'record') this.renderRecord();
+    else if (key === 'bestiary') this.renderBestiary();
     else if (key === 'changelog') this.renderChangelog();
   };
 
@@ -1295,14 +1299,119 @@
     });
   };
 
+  /* ---------------------------------------------------------------- 图鉴 */
+  UI.prototype.renderBestiary = function () {
+    var self = this;
+    var ch = Accounts.char();
+    var prog = P.bestiaryProgress(ch);
+    var countEl = this.$('bestiaryCount');
+    if (countEl) countEl.textContent = prog.found + ' / ' + prog.total;
+
+    var catalog = P.bestiaryCatalog(ch);
+    var tabs = this.$('bestiaryTabs');
+    tabs.innerHTML = '';
+    if (!SP.BIOMES[this.bestiaryBiome]) this.bestiaryBiome = 'camp';
+
+    catalog.forEach(function (group) {
+      var found = group.entries.filter(function (e) { return e.discovered; }).length;
+      var btn = el('button', 'bag-tab' + (self.bestiaryBiome === group.biome ? ' on' : ''),
+        esc(group.name) + ' <span class="tiny muted">' + found + '/' + group.entries.length + '</span>');
+      btn.type = 'button';
+      btn.addEventListener('click', function () {
+        self.bestiaryBiome = group.biome;
+        self.bestiarySel = null;
+        self.renderBestiary();
+      });
+      tabs.appendChild(btn);
+    });
+
+    var group = catalog.find(function (g) { return g.biome === self.bestiaryBiome; }) || catalog[0];
+    var grid = this.$('bestiaryGrid');
+    grid.innerHTML = '';
+    if (!group) return;
+
+    var stillValid = group.entries.some(function (e) { return e.key === self.bestiarySel; });
+    if (!stillValid) {
+      var firstOpen = group.entries.find(function (e) { return e.discovered; });
+      self.bestiarySel = firstOpen ? firstOpen.key : group.entries[0].key;
+    }
+
+    group.entries.forEach(function (entry) {
+      var def = entry.def || {};
+      var card = el('button',
+        'be-card' + (entry.discovered ? '' : ' locked') + (def.boss ? ' boss' : '') +
+        (self.bestiarySel === entry.key ? ' sel' : ''));
+      card.type = 'button';
+      var name = entry.discovered ? def.name : '？？？';
+      var kind = entry.discovered
+        ? ((SP.KIND_LABEL && SP.KIND_LABEL[def.kind]) || def.kind || '')
+        : '未遭遇';
+      var sub = entry.discovered
+        ? (kind + ' · 击杀 ' + entry.kills + (entry.elites ? '（精英 ' + entry.elites + '）' : ''))
+        : '击败后解锁';
+      card.innerHTML =
+        '<div class="be-portrait" style="background:' + esc(entry.discovered ? (def.color || '#445') : '#222836') + '"></div>' +
+        '<div class="be-meta"><div class="be-name">' + esc(name) + '</div>' +
+        '<div class="be-sub">' + esc(sub) + '</div></div>';
+      card.addEventListener('click', function () {
+        self.bestiarySel = entry.key;
+        self.renderBestiary();
+      });
+      grid.appendChild(card);
+    });
+
+    var sel = group.entries.find(function (e) { return e.key === self.bestiarySel; }) || group.entries[0];
+    this.renderBestiaryDetail(sel);
+  };
+
+  UI.prototype.renderBestiaryDetail = function (entry) {
+    var box = this.$('bestiaryDetail');
+    if (!entry || !entry.def) {
+      box.innerHTML = '<div class="tiny muted">点选左侧条目查看详情</div>';
+      return;
+    }
+    var def = entry.def;
+    if (!entry.discovered) {
+      box.innerHTML =
+        '<div class="bd-head">' +
+        '<div class="bd-portrait" style="background:#222836;filter:grayscale(1) brightness(.45)"></div>' +
+        '<div><div class="bd-title">？？？</div>' +
+        '<div class="bd-tags"><span class="bd-tag">未遭遇</span></div></div></div>' +
+        '<div class="bd-desc">这种怪物尚未被记录。进入对应群系击败它即可解锁图鉴。</div>' +
+        '<div class="bd-tip">所属：' + esc((SP.BIOMES[def.biome] && SP.BIOMES[def.biome].name) || '未知') + '</div>';
+      return;
+    }
+    var kind = (SP.KIND_LABEL && SP.KIND_LABEL[def.kind]) || def.kind;
+    var tags = '<span class="bd-tag">' + esc(kind) + '</span>' +
+      (def.boss ? '<span class="bd-tag boss">首领</span>' : '') +
+      '<span class="bd-tag">' + esc((SP.BIOMES[def.biome] && SP.BIOMES[def.biome].name) || '') + '</span>';
+    box.innerHTML =
+      '<div class="bd-head">' +
+      '<div class="bd-portrait" style="background:' + esc(def.color || '#445') + '"></div>' +
+      '<div><div class="bd-title">' + esc(def.name) + '</div>' +
+      '<div class="bd-tags">' + tags + '</div></div></div>' +
+      '<div class="bd-desc">' + esc(def.desc || '暂无描述。') + '</div>' +
+      (def.tip ? '<div class="bd-tip">作战提示：' + esc(def.tip) + '</div>' : '') +
+      '<div class="bd-stats">' +
+      '<div><span>基准生命</span><b>' + Math.round(def.hp) + '</b></div>' +
+      '<div><span>基准伤害</span><b>' + Math.round(def.dmg) + '</b></div>' +
+      '<div><span>移动速度</span><b>' + Math.round(def.speed) + '</b></div>' +
+      '<div><span>攻击距离</span><b>' + Math.round(def.atkRange) + '</b></div>' +
+      '<div><span>累计击杀</span><b>' + entry.kills + '</b></div>' +
+      '<div><span>精英击杀</span><b>' + entry.elites + '</b></div>' +
+      '</div>';
+  };
+
   /* ---------------------------------------------------------------- 战绩 */
   UI.prototype.renderRecord = function () {
     var ch = Accounts.char();
     var s = ch.stats || {};
     var grid = this.$('recordGrid');
     grid.innerHTML = '';
+    var bp = P.bestiaryProgress(ch);
     [['本轮次数', s.runs || 0], ['通关次数', s.clears || 0], ['阵亡次数', s.deaths || 0],
-     ['累计击杀', s.kills || 0], ['获得装备', s.lootFound || 0], ['角色等级', ch.level]
+     ['累计击杀', s.kills || 0], ['获得装备', s.lootFound || 0], ['角色等级', ch.level],
+     ['图鉴解锁', bp.found + ' / ' + bp.total]
     ].forEach(function (row) {
       grid.appendChild(el('div', 'stat', '<b>' + row[1] + '</b><span>' + row[0] + '</span>'));
     });

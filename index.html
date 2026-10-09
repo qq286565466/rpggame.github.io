@@ -350,6 +350,72 @@
   .modal.portal-modal { width: min(860px, 96vw); text-align: left; }
   .portal-lead { margin: -4px 0 12px; text-align: left; }
   .biome-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .modal.bestiary-modal { width: min(920px, 96vw); text-align: left; }
+  .bestiary-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .bestiary-tabs .bag-tab { min-width: 0; }
+  .bestiary-layout {
+    display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.85fr);
+    gap: 12px; align-items: start;
+  }
+  .bestiary-grid {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+    max-height: min(52vh, 420px); overflow-y: auto; padding-right: 2px;
+  }
+  .be-card {
+    display: flex; gap: 10px; align-items: center;
+    padding: 9px 10px; border-radius: 10px;
+    border: 1px solid rgba(140,170,220,.18);
+    background: rgba(12,18,32,.55); cursor: pointer; text-align: left;
+    transition: border-color .15s, background .15s;
+  }
+  .be-card:hover { border-color: rgba(160,200,255,.42); background: rgba(20,30,52,.72); }
+  .be-card.sel { border-color: rgba(255,196,110,.7); box-shadow: inset 0 0 0 1px rgba(255,196,110,.25); }
+  .be-card.locked { opacity: .72; }
+  .be-portrait {
+    width: 44px; height: 44px; border-radius: 50%; flex: 0 0 auto;
+    border: 2px solid rgba(255,255,255,.18);
+    box-shadow: inset 0 0 12px rgba(0,0,0,.35);
+    position: relative; overflow: hidden;
+  }
+  .be-portrait::after {
+    content: ''; position: absolute; inset: 18% 28% 22% 28%;
+    border-radius: 40% 40% 45% 45%; background: rgba(0,0,0,.22);
+  }
+  .be-card.locked .be-portrait { filter: grayscale(1) brightness(.35); }
+  .be-card.locked .be-portrait::after { background: rgba(255,255,255,.08); }
+  .be-meta { min-width: 0; flex: 1; }
+  .be-name { font-weight: 700; font-size: 13px; letter-spacing: .5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .be-sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .be-card.boss .be-name { color: #ffb27a; }
+  .bestiary-detail {
+    border: 1px solid rgba(140,170,220,.18); border-radius: 12px;
+    background: rgba(10,16,28,.62); padding: 12px 13px; min-height: 220px;
+  }
+  .bd-head { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+  .bd-portrait {
+    width: 64px; height: 64px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.22);
+    box-shadow: inset 0 0 16px rgba(0,0,0,.4);
+    position: relative; overflow: hidden; flex: 0 0 auto;
+  }
+  .bd-portrait::after {
+    content: ''; position: absolute; inset: 18% 28% 22% 28%;
+    border-radius: 40% 40% 45% 45%; background: rgba(0,0,0,.22);
+  }
+  .bd-title { font-size: 17px; font-weight: 800; letter-spacing: 1px; }
+  .bd-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+  .bd-tag {
+    font-size: 11px; padding: 2px 7px; border-radius: 999px;
+    background: rgba(120,160,220,.14); border: 1px solid rgba(140,180,230,.22); color: #c9daf5;
+  }
+  .bd-tag.boss { color: #ffd0a8; border-color: rgba(255,178,122,.35); background: rgba(255,140,70,.12); }
+  .bd-desc { font-size: 13px; line-height: 1.55; color: #d7e4f7; margin: 8px 0; }
+  .bd-tip { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+  .bd-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 12px; }
+  .bd-stats div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px dashed rgba(140,170,220,.12); }
+  .bd-stats span { color: var(--muted); }
+  .bd-stats b { color: #e8f0ff; font-weight: 700; }
   .biome-item {
     position: relative; margin: 0; padding: 12px 12px 12px 14px; border-radius: 12px;
     display: flex; flex-direction: column; gap: 6px; min-width: 0;
@@ -541,12 +607,14 @@
     .stat-list { gap: 2px; }
     .stat-list .sl { line-height: 1.35; }
     .biome-grid { grid-template-columns: 1fr; }
+    .bestiary-layout { grid-template-columns: 1fr; }
+    .bestiary-grid { grid-template-columns: 1fr 1fr; max-height: 36vh; }
     .forge-layout { grid-template-columns: 1fr; max-height: none; }
     .forge-list { max-height: 220px; }
     .result-grid { grid-template-columns: 1fr 1fr; }
-    #panelBag, #panelForge, #panelPortal, #panelShop, #panelRecord, #panelHelp, #panelChangelog { align-items: stretch; padding: 0; }
+    #panelBag, #panelForge, #panelPortal, #panelShop, #panelRecord, #panelBestiary, #panelHelp, #panelChangelog { align-items: stretch; padding: 0; }
     #panelBag .modal, #panelForge .modal, #panelPortal .modal,
-    #panelShop .modal, #panelRecord .modal, #panelHelp .modal, #panelChangelog .modal {
+    #panelShop .modal, #panelRecord .modal, #panelBestiary .modal, #panelHelp .modal, #panelChangelog .modal {
       width: 100%; max-width: none; height: 100%; max-height: none; border-radius: 0;
       padding: calc(10px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
     }
@@ -744,13 +812,17 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
           <span>战绩</span><span class="ab-key">V</span>
         </button>
+        <button class="action-btn" id="btnBestiary" title="快捷键 G">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/><circle cx="17" cy="16" r="1.4" fill="currentColor"/></svg>
+          <span>图鉴</span><span class="ab-key">G</span>
+        </button>
         <button class="action-btn" id="btnHelp" title="快捷键 H">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.4"/><circle cx="12" cy="17" r="0.9" fill="currentColor"/></svg>
           <span>帮助</span><span class="ab-key">H</span>
         </button>
       </div>
 
-      <div class="hideout-hint tiny muted keys-hint">WASD 走动 · 走到 NPC 面前按 <span class="key">F</span> 交互 · <span class="key">B</span> 背包 · <span class="key">Esc</span> 关闭面板</div>
+      <div class="hideout-hint tiny muted keys-hint">WASD 走动 · 走到 NPC 面前按 <span class="key">F</span> 交互 · <span class="key">B</span> 背包 · <span class="key">G</span> 图鉴 · <span class="key">Esc</span> 关闭面板</div>
       <div class="hideout-hint tiny muted touch-hint">左侧摇杆走动 · 点 NPC 走近 · 点金色提示交互</div>
       <div id="stick" class="stick" aria-hidden="true"><div class="stick-base"><div class="stick-knob"></div></div></div>
     </div>
@@ -872,6 +944,26 @@
       </div>
     </div>
 
+    <!-- 图鉴 -->
+    <div class="overlay" id="panelBestiary">
+      <div class="panel modal bestiary-modal">
+        <div class="modal-head">
+          <h2>怪物图鉴</h2>
+          <span class="tiny muted" id="bestiaryCount">0 / 16</span>
+          <span class="spacer"></span>
+          <button class="ghost tiny-btn" data-close="panelBestiary">关闭 (G)</button>
+        </div>
+        <p class="tiny muted" style="margin:0 0 10px;text-align:left">击败过的怪物会解锁条目。未遭遇的显示为「？？？」。</p>
+        <div class="bestiary-tabs" id="bestiaryTabs"></div>
+        <div class="bestiary-layout">
+          <div class="bestiary-grid" id="bestiaryGrid"></div>
+          <div class="bestiary-detail" id="bestiaryDetail">
+            <div class="tiny muted">点选左侧条目查看详情</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 帮助 -->
     <div class="overlay" id="panelHelp">
       <div class="panel modal" style="width:min(620px,94vw);text-align:left">
@@ -887,7 +979,8 @@
           自动攻击打开后，会先转向附近最近的敌人，进入攻击距离后再出手。<br><br>
           <b>武器类型</b>：短剑挥砍 · 战斧横劈 · 匕首连刺 · 重锤砸击（震波）· 长枪突刺 · 短弓射箭 · 法杖奥术弹（可穿透）· 链锤回旋。<br><br>
           <b>藏身处</b>：走到 NPC 面前按 <span class="key">F</span> 交互 —— 铁匠负责强化/重铸/分解，商人负责补给与神秘装备，
-          时空传送门用来选择副本层级。背包 / 传送门 / 战绩 都可以用下方按钮或快捷键直接打开。<br><br>
+          时空传送门用来选择副本层级。背包 / 传送门 / 战绩 / 图鉴 都可以用下方按钮或快捷键直接打开。<br><br>
+          <b>图鉴</b>：按 <span class="key">G</span> 打开怪物图鉴。击败过的怪物会解锁名称、习性与击杀统计；未遭遇的显示为「？？？」。<br><br>
           <b>副本</b>：刷够击杀配额后关底首领出现，击败即通关并解锁更深一层。
           怪物等级越高，掉落装备的物品等级也越高；装备跟不上就会打不动、也扛不住，需要回浅层刷装备。<br><br>
           <b>装备</b>：7 个部位、5 种品质、随机词条。强化每级 +7% 全属性；重铸保留词条种类重掷数值；

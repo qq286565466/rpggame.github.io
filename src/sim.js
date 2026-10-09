@@ -50,40 +50,61 @@
   function E(key, name, kind, o) {
     return {
       key: key, name: name, kind: kind, family: o.family || 'beast',
+      biome: o.biome || 'camp',
       hp: o.hp, speed: o.speed, radius: o.r, dmg: o.dmg,
       atkCd: o.cd, atkRange: o.range, xp: o.xp, coin: o.coin,
       color: o.color, accent: o.accent || null,
+      desc: o.desc || '',
+      tip: o.tip || '',
       boss: kind === 'boss',
       slamR: o.slamR || 190, summon: o.summon || null, summonN: o.summonN || 3,
       volley: !!o.volley, elite: false
     };
   }
 
+  var KIND_LABEL = { melee: '近战', charger: '冲锋', ranged: '远程', boss: '首领' };
+
   var ENEMY_TYPES = {};
   [
     /* --- 科多兽营地 --- */
-    E('calf', '科多兽幼崽', 'melee', { family: 'beast', hp: 46, speed: 96, r: 19, dmg: 8, cd: 1.1, range: 40, xp: 6, coin: 1, color: '#9a7550' }),
-    E('charger', '冲锋科多兽', 'charger', { family: 'beast', hp: 88, speed: 74, r: 26, dmg: 19, cd: 2.6, range: 46, xp: 11, coin: 2, color: '#79543a' }),
-    E('bat', '孢子蝠', 'ranged', { family: 'wing', hp: 34, speed: 134, r: 15, dmg: 7, cd: 2.2, range: 300, xp: 9, coin: 2, color: '#8f66bd' }),
-    E('alpha', '营地首领·科多兽王', 'boss', { family: 'beast', hp: 880, speed: 68, r: 44, dmg: 26, cd: 4.0, range: 84, xp: 150, coin: 30, color: '#b45f34', summon: 'calf', summonN: 3 }),
+    E('calf', '科多兽幼崽', 'melee', { biome: 'camp', family: 'beast', hp: 46, speed: 96, r: 19, dmg: 8, cd: 1.1, range: 40, xp: 6, coin: 1, color: '#9a7550',
+      desc: '刚会走路的科多兽幼崽，数量多、威胁小，是营地最常见的炮灰。', tip: '贴身啃咬；适合练手与刷材料。' }),
+    E('charger', '冲锋科多兽', 'charger', { biome: 'camp', family: 'beast', hp: 88, speed: 74, r: 26, dmg: 19, cd: 2.6, range: 46, xp: 11, coin: 2, color: '#79543a',
+      desc: '低头蓄力后直线冲锋的壮年科多兽，撞上会很疼。', tip: '注意侧步躲开冲锋轨迹。' }),
+    E('bat', '孢子蝠', 'ranged', { biome: 'camp', family: 'wing', hp: 34, speed: 134, r: 15, dmg: 7, cd: 2.2, range: 300, xp: 9, coin: 2, color: '#8f66bd',
+      desc: '栖息在营地外围的飞蝠，会从远处吐出孢子弹。', tip: '优先击破，避免被风筝。' }),
+    E('alpha', '营地首领·科多兽王', 'boss', { biome: 'camp', family: 'beast', hp: 880, speed: 68, r: 44, dmg: 26, cd: 4.0, range: 84, xp: 150, coin: 30, color: '#b45f34', summon: 'calf', summonN: 3,
+      desc: '科多兽群落的头领，体型巨大，会召唤幼崽助战。', tip: '清掉召唤物后再集火本体。' }),
 
     /* --- 孢子森林 --- */
-    E('sporeling', '孢子行者', 'melee', { family: 'fungus', hp: 62, speed: 104, r: 20, dmg: 10, cd: 1.0, range: 42, xp: 8, coin: 1, color: '#5f8f5a' }),
-    E('thornbeast', '荆棘兽', 'charger', { family: 'fungus', hp: 120, speed: 80, r: 28, dmg: 24, cd: 2.5, range: 48, xp: 14, coin: 2, color: '#4e7a44' }),
-    E('spitter', '孢囊喷吐者', 'ranged', { family: 'wing', hp: 44, speed: 120, r: 17, dmg: 9, cd: 1.9, range: 320, xp: 11, coin: 2, color: '#8fbf6a' }),
-    E('treant', '森林主宰·孢子树王', 'boss', { family: 'fungus', hp: 1150, speed: 58, r: 48, dmg: 30, cd: 3.6, range: 92, xp: 190, coin: 36, color: '#4a6b3c', summon: 'sporeling', summonN: 4, slamR: 220, volley: true }),
+    E('sporeling', '孢子行者', 'melee', { biome: 'forest', family: 'fungus', hp: 62, speed: 104, r: 20, dmg: 10, cd: 1.0, range: 42, xp: 8, coin: 1, color: '#5f8f5a',
+      desc: '由菌丝拼成的人形步卒，在森林中成群游荡。', tip: '近战群怪，注意别被包圆。' }),
+    E('thornbeast', '荆棘兽', 'charger', { biome: 'forest', family: 'fungus', hp: 120, speed: 80, r: 28, dmg: 24, cd: 2.5, range: 48, xp: 14, coin: 2, color: '#4e7a44',
+      desc: '披着荆棘甲壳的猛兽，冲锋时带倒一片灌木。', tip: '冲锋前有明显蓄力，侧移躲避。' }),
+    E('spitter', '孢囊喷吐者', 'ranged', { biome: 'forest', family: 'wing', hp: 44, speed: 120, r: 17, dmg: 9, cd: 1.9, range: 320, xp: 11, coin: 2, color: '#8fbf6a',
+      desc: '鼓胀的孢囊生物，会喷射黏稠孢弹封锁走位。', tip: '远程骚扰，尽快切入。' }),
+    E('treant', '森林主宰·孢子树王', 'boss', { biome: 'forest', family: 'fungus', hp: 1150, speed: 58, r: 48, dmg: 30, cd: 3.6, range: 92, xp: 190, coin: 36, color: '#4a6b3c', summon: 'sporeling', summonN: 4, slamR: 220, volley: true,
+      desc: '扎根森林深处的巨型菌树，根须与孢雨同时袭来。', tip: '远离震击圈，边风筝边清召唤。' }),
 
     /* --- 时空洞窟 --- */
-    E('crawler', '晶壳爬虫', 'melee', { family: 'crystal', hp: 84, speed: 98, r: 21, dmg: 13, cd: 1.1, range: 42, xp: 10, coin: 2, color: '#5a7fa8' }),
-    E('gargoyle', '石像鬼', 'charger', { family: 'crystal', hp: 150, speed: 86, r: 27, dmg: 28, cd: 2.4, range: 48, xp: 17, coin: 3, color: '#6d7793' }),
-    E('shardcaster', '碎晶术士', 'ranged', { family: 'wing', hp: 56, speed: 116, r: 18, dmg: 12, cd: 1.8, range: 340, xp: 14, coin: 3, color: '#7fc4e8' }),
-    E('golem', '洞窟守卫·时空魔像', 'boss', { family: 'crystal', hp: 1500, speed: 56, r: 50, dmg: 34, cd: 3.4, range: 96, xp: 240, coin: 44, color: '#6f86a8', summon: 'crawler', summonN: 3, slamR: 240, volley: true }),
+    E('crawler', '晶壳爬虫', 'melee', { biome: 'cave', family: 'crystal', hp: 84, speed: 98, r: 21, dmg: 13, cd: 1.1, range: 42, xp: 10, coin: 2, color: '#5a7fa8',
+      desc: '覆着晶壳的洞穴爬虫，甲壳反光刺眼。', tip: '皮糙血厚的近战单位。' }),
+    E('gargoyle', '石像鬼', 'charger', { biome: 'cave', family: 'crystal', hp: 150, speed: 86, r: 27, dmg: 28, cd: 2.4, range: 48, xp: 17, coin: 3, color: '#6d7793',
+      desc: '被时空乱流活化的石像，会突然加速扑击。', tip: '冲锋伤害高，留好冲刺。' }),
+    E('shardcaster', '碎晶术士', 'ranged', { biome: 'cave', family: 'wing', hp: 56, speed: 116, r: 18, dmg: 12, cd: 1.8, range: 340, xp: 14, coin: 3, color: '#7fc4e8',
+      desc: '操纵碎晶的法术生物，弹道又快又密。', tip: '远程优先目标。' }),
+    E('golem', '洞窟守卫·时空魔像', 'boss', { biome: 'cave', family: 'crystal', hp: 1500, speed: 56, r: 50, dmg: 34, cd: 3.4, range: 96, xp: 240, coin: 44, color: '#6f86a8', summon: 'crawler', summonN: 3, slamR: 240, volley: true,
+      desc: '镇守洞窟的巨型魔像，拳风与晶雨足以碾平探险者。', tip: '站位拉开，避开震击与弹幕。' }),
 
     /* --- 魔兽巢穴 --- */
-    E('broodling', '巢穴幼魔', 'melee', { family: 'demon', hp: 70, speed: 132, r: 17, dmg: 12, cd: 0.9, range: 38, xp: 9, coin: 2, color: '#a85a72' }),
-    E('ravager', '噬骨魔', 'charger', { family: 'demon', hp: 190, speed: 92, r: 29, dmg: 33, cd: 2.3, range: 50, xp: 21, coin: 4, color: '#8a4a5c' }),
-    E('venomwing', '毒翼', 'ranged', { family: 'wing', hp: 68, speed: 140, r: 18, dmg: 14, cd: 1.7, range: 330, xp: 16, coin: 3, color: '#a06ad0' }),
-    E('queen', '巢穴女王', 'boss', { family: 'demon', hp: 1900, speed: 78, r: 52, dmg: 38, cd: 3.0, range: 100, xp: 300, coin: 55, color: '#b05a8a', summon: 'broodling', summonN: 5, slamR: 260, volley: true })
+    E('broodling', '巢穴幼魔', 'melee', { biome: 'nest', family: 'demon', hp: 70, speed: 132, r: 17, dmg: 12, cd: 0.9, range: 38, xp: 9, coin: 2, color: '#a85a72',
+      desc: '巢穴中最躁动的幼魔，速度极快、成群扑咬。', tip: '高速近战，注意走位。' }),
+    E('ravager', '噬骨魔', 'charger', { biome: 'nest', family: 'demon', hp: 190, speed: 92, r: 29, dmg: 33, cd: 2.3, range: 50, xp: 21, coin: 4, color: '#8a4a5c',
+      desc: '啃食骸骨成长的重型魔兽，冲锋势大力沉。', tip: '高伤冲锋，别硬扛。' }),
+    E('venomwing', '毒翼', 'ranged', { biome: 'nest', family: 'wing', hp: 68, speed: 140, r: 18, dmg: 14, cd: 1.7, range: 330, xp: 16, coin: 3, color: '#a06ad0',
+      desc: '喷吐毒液的翼魔，弹道带腐蚀性光晕。', tip: '远程威胁，优先清理。' }),
+    E('queen', '巢穴女王', 'boss', { biome: 'nest', family: 'demon', hp: 1900, speed: 78, r: 52, dmg: 38, cd: 3.0, range: 100, xp: 300, coin: 55, color: '#b05a8a', summon: 'broodling', summonN: 5, slamR: 260, volley: true,
+      desc: '魔兽巢穴的主宰，不断产下幼魔并以毒雨镇压入侵者。', tip: '终局首领：清召唤、躲震击、抓输出窗口。' })
   ].forEach(function (e) { ENEMY_TYPES[e.key] = e; });
 
   /* ========================================================= 角色属性派生 */
@@ -264,6 +285,7 @@
     this.time = 0;
     this.kills = 0;
     this.eliteKills = 0;
+    this.killsByKey = {};
     this.coins = 0;
     this.stones = 0;
     this.upStones = 0;
@@ -487,6 +509,9 @@
     e.dying = 0.3;
     this.kills++;
     if (e.elite) this.eliteKills++;
+    var kb = this.killsByKey[e.key] || (this.killsByKey[e.key] = { kills: 0, elites: 0 });
+    kb.kills++;
+    if (e.elite) kb.elites++;
     this.combo++;
     this.comboT = 2.4;
     var p = this.player;
@@ -634,9 +659,15 @@
   };
 
   World.prototype.summary = function () {
+    var byKey = {};
+    Object.keys(this.killsByKey).forEach(function (k) {
+      var e = this.killsByKey[k];
+      byKey[k] = { kills: e.kills || 0, elites: e.elites || 0 };
+    }, this);
     return {
       biome: this.biomeKey, biomeName: this.biome.name, floor: this.floor, mlvl: this.mlvl,
       time: this.time, kills: this.kills, eliteKills: this.eliteKills,
+      killsByKey: byKey,
       coins: this.coins, stones: this.stones, upStones: this.upStones, reStones: this.reStones,
       loot: this.loot.slice(),
       level: this.player.level,
@@ -1297,6 +1328,7 @@
   SP.BIOMES = BIOMES;
   SP.BIOME_ORDER = BIOME_ORDER;
   SP.ENEMY_TYPES = ENEMY_TYPES;
+  SP.KIND_LABEL = KIND_LABEL;
   SP.deriveCharacter = deriveCharacter;
   SP.armorReduction = armorReduction;
   SP.xpForLevel = xpForLevel;

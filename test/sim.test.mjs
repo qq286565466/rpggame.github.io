@@ -602,6 +602,31 @@ test('传说武器·渴血：击杀回复生命', () => {
   assert.ok(Math.abs(w.player.hp - (before + w.player.maxHp * 0.05)) < 1.5, '回血约为最大生命 5%');
 });
 
+test('击杀会按怪物 key 记入 killsByKey 并出现在 summary', () => {
+  const w = makeWorld({ seed: 41 });
+  w.enemies.length = 0;
+  const a = w.spawnEnemy('calf'); a.x = w.player.x + 30; a.y = w.player.y; a.spawnT = 0; a.hp = 1;
+  const b = w.spawnEnemy('calf', { elite: true }); b.x = w.player.x + 30; b.y = w.player.y; b.spawnT = 0; b.hp = 1;
+  w.damageEnemy(a, 999, {});
+  w.damageEnemy(b, 999, {});
+  assert.equal(w.killsByKey.calf.kills, 2);
+  assert.equal(w.killsByKey.calf.elites, 1);
+  const sum = w.summary();
+  assert.equal(sum.killsByKey.calf.kills, 2);
+  assert.equal(sum.killsByKey.calf.elites, 1);
+});
+
+test('怪物图鉴字段：每种敌人都有群系与描述', () => {
+  const keys = Object.keys(SP.ENEMY_TYPES);
+  assert.equal(keys.length, 16);
+  for (const key of keys) {
+    const e = SP.ENEMY_TYPES[key];
+    assert.ok(e.biome && SP.BIOMES[e.biome], key + ' 缺少有效 biome');
+    assert.ok(e.desc && e.tip, key + ' 缺少图鉴文案');
+    assert.ok(SP.KIND_LABEL[e.kind], key + ' 缺少 kind 标签');
+  }
+});
+
 test('传说武器·超载：提升技能伤害并缩短震击冷却', () => {
   const base = SP.deriveCharacter(makeCharacter());
   const oc = SP.deriveCharacter(Object.assign(makeCharacter(), {

@@ -350,6 +350,72 @@
   .modal.portal-modal { width: min(860px, 96vw); text-align: left; }
   .portal-lead { margin: -4px 0 12px; text-align: left; }
   .biome-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .modal.bestiary-modal { width: min(920px, 96vw); text-align: left; }
+  .bestiary-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .bestiary-tabs .bag-tab { min-width: 0; }
+  .bestiary-layout {
+    display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.85fr);
+    gap: 12px; align-items: start;
+  }
+  .bestiary-grid {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+    max-height: min(52vh, 420px); overflow-y: auto; padding-right: 2px;
+  }
+  .be-card {
+    display: flex; gap: 10px; align-items: center;
+    padding: 9px 10px; border-radius: 10px;
+    border: 1px solid rgba(140,170,220,.18);
+    background: rgba(12,18,32,.55); cursor: pointer; text-align: left;
+    transition: border-color .15s, background .15s;
+  }
+  .be-card:hover { border-color: rgba(160,200,255,.42); background: rgba(20,30,52,.72); }
+  .be-card.sel { border-color: rgba(255,196,110,.7); box-shadow: inset 0 0 0 1px rgba(255,196,110,.25); }
+  .be-card.locked { opacity: .72; }
+  .be-portrait {
+    width: 44px; height: 44px; border-radius: 50%; flex: 0 0 auto;
+    border: 2px solid rgba(255,255,255,.18);
+    box-shadow: inset 0 0 12px rgba(0,0,0,.35);
+    position: relative; overflow: hidden;
+  }
+  .be-portrait::after {
+    content: ''; position: absolute; inset: 18% 28% 22% 28%;
+    border-radius: 40% 40% 45% 45%; background: rgba(0,0,0,.22);
+  }
+  .be-card.locked .be-portrait { filter: grayscale(1) brightness(.35); }
+  .be-card.locked .be-portrait::after { background: rgba(255,255,255,.08); }
+  .be-meta { min-width: 0; flex: 1; }
+  .be-name { font-weight: 700; font-size: 13px; letter-spacing: .5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .be-sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .be-card.boss .be-name { color: #ffb27a; }
+  .bestiary-detail {
+    border: 1px solid rgba(140,170,220,.18); border-radius: 12px;
+    background: rgba(10,16,28,.62); padding: 12px 13px; min-height: 220px;
+  }
+  .bd-head { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+  .bd-portrait {
+    width: 64px; height: 64px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.22);
+    box-shadow: inset 0 0 16px rgba(0,0,0,.4);
+    position: relative; overflow: hidden; flex: 0 0 auto;
+  }
+  .bd-portrait::after {
+    content: ''; position: absolute; inset: 18% 28% 22% 28%;
+    border-radius: 40% 40% 45% 45%; background: rgba(0,0,0,.22);
+  }
+  .bd-title { font-size: 17px; font-weight: 800; letter-spacing: 1px; }
+  .bd-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+  .bd-tag {
+    font-size: 11px; padding: 2px 7px; border-radius: 999px;
+    background: rgba(120,160,220,.14); border: 1px solid rgba(140,180,230,.22); color: #c9daf5;
+  }
+  .bd-tag.boss { color: #ffd0a8; border-color: rgba(255,178,122,.35); background: rgba(255,140,70,.12); }
+  .bd-desc { font-size: 13px; line-height: 1.55; color: #d7e4f7; margin: 8px 0; }
+  .bd-tip { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+  .bd-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 12px; }
+  .bd-stats div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px dashed rgba(140,170,220,.12); }
+  .bd-stats span { color: var(--muted); }
+  .bd-stats b { color: #e8f0ff; font-weight: 700; }
   .biome-item {
     position: relative; margin: 0; padding: 12px 12px 12px 14px; border-radius: 12px;
     display: flex; flex-direction: column; gap: 6px; min-width: 0;
@@ -541,12 +607,14 @@
     .stat-list { gap: 2px; }
     .stat-list .sl { line-height: 1.35; }
     .biome-grid { grid-template-columns: 1fr; }
+    .bestiary-layout { grid-template-columns: 1fr; }
+    .bestiary-grid { grid-template-columns: 1fr 1fr; max-height: 36vh; }
     .forge-layout { grid-template-columns: 1fr; max-height: none; }
     .forge-list { max-height: 220px; }
     .result-grid { grid-template-columns: 1fr 1fr; }
-    #panelBag, #panelForge, #panelPortal, #panelShop, #panelRecord, #panelHelp, #panelChangelog { align-items: stretch; padding: 0; }
+    #panelBag, #panelForge, #panelPortal, #panelShop, #panelRecord, #panelBestiary, #panelHelp, #panelChangelog { align-items: stretch; padding: 0; }
     #panelBag .modal, #panelForge .modal, #panelPortal .modal,
-    #panelShop .modal, #panelRecord .modal, #panelHelp .modal, #panelChangelog .modal {
+    #panelShop .modal, #panelRecord .modal, #panelBestiary .modal, #panelHelp .modal, #panelChangelog .modal {
       width: 100%; max-width: none; height: 100%; max-height: none; border-radius: 0;
       padding: calc(10px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
     }
@@ -744,13 +812,17 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
           <span>战绩</span><span class="ab-key">V</span>
         </button>
+        <button class="action-btn" id="btnBestiary" title="快捷键 G">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/><circle cx="17" cy="16" r="1.4" fill="currentColor"/></svg>
+          <span>图鉴</span><span class="ab-key">G</span>
+        </button>
         <button class="action-btn" id="btnHelp" title="快捷键 H">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.4"/><circle cx="12" cy="17" r="0.9" fill="currentColor"/></svg>
           <span>帮助</span><span class="ab-key">H</span>
         </button>
       </div>
 
-      <div class="hideout-hint tiny muted keys-hint">WASD 走动 · 走到 NPC 面前按 <span class="key">F</span> 交互 · <span class="key">B</span> 背包 · <span class="key">Esc</span> 关闭面板</div>
+      <div class="hideout-hint tiny muted keys-hint">WASD 走动 · 走到 NPC 面前按 <span class="key">F</span> 交互 · <span class="key">B</span> 背包 · <span class="key">G</span> 图鉴 · <span class="key">Esc</span> 关闭面板</div>
       <div class="hideout-hint tiny muted touch-hint">左侧摇杆走动 · 点 NPC 走近 · 点金色提示交互</div>
       <div id="stick" class="stick" aria-hidden="true"><div class="stick-base"><div class="stick-knob"></div></div></div>
     </div>
@@ -872,6 +944,26 @@
       </div>
     </div>
 
+    <!-- 图鉴 -->
+    <div class="overlay" id="panelBestiary">
+      <div class="panel modal bestiary-modal">
+        <div class="modal-head">
+          <h2>怪物图鉴</h2>
+          <span class="tiny muted" id="bestiaryCount">0 / 16</span>
+          <span class="spacer"></span>
+          <button class="ghost tiny-btn" data-close="panelBestiary">关闭 (G)</button>
+        </div>
+        <p class="tiny muted" style="margin:0 0 10px;text-align:left">击败过的怪物会解锁条目。未遭遇的显示为「？？？」。</p>
+        <div class="bestiary-tabs" id="bestiaryTabs"></div>
+        <div class="bestiary-layout">
+          <div class="bestiary-grid" id="bestiaryGrid"></div>
+          <div class="bestiary-detail" id="bestiaryDetail">
+            <div class="tiny muted">点选左侧条目查看详情</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 帮助 -->
     <div class="overlay" id="panelHelp">
       <div class="panel modal" style="width:min(620px,94vw);text-align:left">
@@ -887,7 +979,8 @@
           自动攻击打开后，会先转向附近最近的敌人，进入攻击距离后再出手。<br><br>
           <b>武器类型</b>：短剑挥砍 · 战斧横劈 · 匕首连刺 · 重锤砸击（震波）· 长枪突刺 · 短弓射箭 · 法杖奥术弹（可穿透）· 链锤回旋。<br><br>
           <b>藏身处</b>：走到 NPC 面前按 <span class="key">F</span> 交互 —— 铁匠负责强化/重铸/分解，商人负责补给与神秘装备，
-          时空传送门用来选择副本层级。背包 / 传送门 / 战绩 都可以用下方按钮或快捷键直接打开。<br><br>
+          时空传送门用来选择副本层级。背包 / 传送门 / 战绩 / 图鉴 都可以用下方按钮或快捷键直接打开。<br><br>
+          <b>图鉴</b>：按 <span class="key">G</span> 打开怪物图鉴。击败过的怪物会解锁名称、习性与击杀统计；未遭遇的显示为「？？？」。<br><br>
           <b>副本</b>：刷够击杀配额后关底首领出现，击败即通关并解锁更深一层。
           怪物等级越高，掉落装备的物品等级也越高；装备跟不上就会打不动、也扛不住，需要回浅层刷装备。<br><br>
           <b>装备</b>：7 个部位、5 种品质、随机词条。强化每级 +7% 全属性；重铸保留词条种类重掷数值；
@@ -1133,13 +1226,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.3.0';
+  SP.VERSION = '2.4.0';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.4.0',
+      date: '2026-10-09',
+      title: '怪物图鉴',
+      items: [
+        '藏身处新增怪物图鉴（快捷键 G）：按群系浏览全部 16 种敌人',
+        '击败怪物后解锁名称、习性、作战提示与击杀统计；未遭遇显示为「？？？」',
+        '图鉴进度写入本地存档，通关或阵亡结算时自动汇总本局击杀'
+      ]
+    },
     {
       version: '2.3.0',
       date: '2026-10-09',
@@ -1734,40 +1837,61 @@
   function E(key, name, kind, o) {
     return {
       key: key, name: name, kind: kind, family: o.family || 'beast',
+      biome: o.biome || 'camp',
       hp: o.hp, speed: o.speed, radius: o.r, dmg: o.dmg,
       atkCd: o.cd, atkRange: o.range, xp: o.xp, coin: o.coin,
       color: o.color, accent: o.accent || null,
+      desc: o.desc || '',
+      tip: o.tip || '',
       boss: kind === 'boss',
       slamR: o.slamR || 190, summon: o.summon || null, summonN: o.summonN || 3,
       volley: !!o.volley, elite: false
     };
   }
 
+  var KIND_LABEL = { melee: '近战', charger: '冲锋', ranged: '远程', boss: '首领' };
+
   var ENEMY_TYPES = {};
   [
     /* --- 科多兽营地 --- */
-    E('calf', '科多兽幼崽', 'melee', { family: 'beast', hp: 46, speed: 96, r: 19, dmg: 8, cd: 1.1, range: 40, xp: 6, coin: 1, color: '#9a7550' }),
-    E('charger', '冲锋科多兽', 'charger', { family: 'beast', hp: 88, speed: 74, r: 26, dmg: 19, cd: 2.6, range: 46, xp: 11, coin: 2, color: '#79543a' }),
-    E('bat', '孢子蝠', 'ranged', { family: 'wing', hp: 34, speed: 134, r: 15, dmg: 7, cd: 2.2, range: 300, xp: 9, coin: 2, color: '#8f66bd' }),
-    E('alpha', '营地首领·科多兽王', 'boss', { family: 'beast', hp: 880, speed: 68, r: 44, dmg: 26, cd: 4.0, range: 84, xp: 150, coin: 30, color: '#b45f34', summon: 'calf', summonN: 3 }),
+    E('calf', '科多兽幼崽', 'melee', { biome: 'camp', family: 'beast', hp: 46, speed: 96, r: 19, dmg: 8, cd: 1.1, range: 40, xp: 6, coin: 1, color: '#9a7550',
+      desc: '刚会走路的科多兽幼崽，数量多、威胁小，是营地最常见的炮灰。', tip: '贴身啃咬；适合练手与刷材料。' }),
+    E('charger', '冲锋科多兽', 'charger', { biome: 'camp', family: 'beast', hp: 88, speed: 74, r: 26, dmg: 19, cd: 2.6, range: 46, xp: 11, coin: 2, color: '#79543a',
+      desc: '低头蓄力后直线冲锋的壮年科多兽，撞上会很疼。', tip: '注意侧步躲开冲锋轨迹。' }),
+    E('bat', '孢子蝠', 'ranged', { biome: 'camp', family: 'wing', hp: 34, speed: 134, r: 15, dmg: 7, cd: 2.2, range: 300, xp: 9, coin: 2, color: '#8f66bd',
+      desc: '栖息在营地外围的飞蝠，会从远处吐出孢子弹。', tip: '优先击破，避免被风筝。' }),
+    E('alpha', '营地首领·科多兽王', 'boss', { biome: 'camp', family: 'beast', hp: 880, speed: 68, r: 44, dmg: 26, cd: 4.0, range: 84, xp: 150, coin: 30, color: '#b45f34', summon: 'calf', summonN: 3,
+      desc: '科多兽群落的头领，体型巨大，会召唤幼崽助战。', tip: '清掉召唤物后再集火本体。' }),
 
     /* --- 孢子森林 --- */
-    E('sporeling', '孢子行者', 'melee', { family: 'fungus', hp: 62, speed: 104, r: 20, dmg: 10, cd: 1.0, range: 42, xp: 8, coin: 1, color: '#5f8f5a' }),
-    E('thornbeast', '荆棘兽', 'charger', { family: 'fungus', hp: 120, speed: 80, r: 28, dmg: 24, cd: 2.5, range: 48, xp: 14, coin: 2, color: '#4e7a44' }),
-    E('spitter', '孢囊喷吐者', 'ranged', { family: 'wing', hp: 44, speed: 120, r: 17, dmg: 9, cd: 1.9, range: 320, xp: 11, coin: 2, color: '#8fbf6a' }),
-    E('treant', '森林主宰·孢子树王', 'boss', { family: 'fungus', hp: 1150, speed: 58, r: 48, dmg: 30, cd: 3.6, range: 92, xp: 190, coin: 36, color: '#4a6b3c', summon: 'sporeling', summonN: 4, slamR: 220, volley: true }),
+    E('sporeling', '孢子行者', 'melee', { biome: 'forest', family: 'fungus', hp: 62, speed: 104, r: 20, dmg: 10, cd: 1.0, range: 42, xp: 8, coin: 1, color: '#5f8f5a',
+      desc: '由菌丝拼成的人形步卒，在森林中成群游荡。', tip: '近战群怪，注意别被包圆。' }),
+    E('thornbeast', '荆棘兽', 'charger', { biome: 'forest', family: 'fungus', hp: 120, speed: 80, r: 28, dmg: 24, cd: 2.5, range: 48, xp: 14, coin: 2, color: '#4e7a44',
+      desc: '披着荆棘甲壳的猛兽，冲锋时带倒一片灌木。', tip: '冲锋前有明显蓄力，侧移躲避。' }),
+    E('spitter', '孢囊喷吐者', 'ranged', { biome: 'forest', family: 'wing', hp: 44, speed: 120, r: 17, dmg: 9, cd: 1.9, range: 320, xp: 11, coin: 2, color: '#8fbf6a',
+      desc: '鼓胀的孢囊生物，会喷射黏稠孢弹封锁走位。', tip: '远程骚扰，尽快切入。' }),
+    E('treant', '森林主宰·孢子树王', 'boss', { biome: 'forest', family: 'fungus', hp: 1150, speed: 58, r: 48, dmg: 30, cd: 3.6, range: 92, xp: 190, coin: 36, color: '#4a6b3c', summon: 'sporeling', summonN: 4, slamR: 220, volley: true,
+      desc: '扎根森林深处的巨型菌树，根须与孢雨同时袭来。', tip: '远离震击圈，边风筝边清召唤。' }),
 
     /* --- 时空洞窟 --- */
-    E('crawler', '晶壳爬虫', 'melee', { family: 'crystal', hp: 84, speed: 98, r: 21, dmg: 13, cd: 1.1, range: 42, xp: 10, coin: 2, color: '#5a7fa8' }),
-    E('gargoyle', '石像鬼', 'charger', { family: 'crystal', hp: 150, speed: 86, r: 27, dmg: 28, cd: 2.4, range: 48, xp: 17, coin: 3, color: '#6d7793' }),
-    E('shardcaster', '碎晶术士', 'ranged', { family: 'wing', hp: 56, speed: 116, r: 18, dmg: 12, cd: 1.8, range: 340, xp: 14, coin: 3, color: '#7fc4e8' }),
-    E('golem', '洞窟守卫·时空魔像', 'boss', { family: 'crystal', hp: 1500, speed: 56, r: 50, dmg: 34, cd: 3.4, range: 96, xp: 240, coin: 44, color: '#6f86a8', summon: 'crawler', summonN: 3, slamR: 240, volley: true }),
+    E('crawler', '晶壳爬虫', 'melee', { biome: 'cave', family: 'crystal', hp: 84, speed: 98, r: 21, dmg: 13, cd: 1.1, range: 42, xp: 10, coin: 2, color: '#5a7fa8',
+      desc: '覆着晶壳的洞穴爬虫，甲壳反光刺眼。', tip: '皮糙血厚的近战单位。' }),
+    E('gargoyle', '石像鬼', 'charger', { biome: 'cave', family: 'crystal', hp: 150, speed: 86, r: 27, dmg: 28, cd: 2.4, range: 48, xp: 17, coin: 3, color: '#6d7793',
+      desc: '被时空乱流活化的石像，会突然加速扑击。', tip: '冲锋伤害高，留好冲刺。' }),
+    E('shardcaster', '碎晶术士', 'ranged', { biome: 'cave', family: 'wing', hp: 56, speed: 116, r: 18, dmg: 12, cd: 1.8, range: 340, xp: 14, coin: 3, color: '#7fc4e8',
+      desc: '操纵碎晶的法术生物，弹道又快又密。', tip: '远程优先目标。' }),
+    E('golem', '洞窟守卫·时空魔像', 'boss', { biome: 'cave', family: 'crystal', hp: 1500, speed: 56, r: 50, dmg: 34, cd: 3.4, range: 96, xp: 240, coin: 44, color: '#6f86a8', summon: 'crawler', summonN: 3, slamR: 240, volley: true,
+      desc: '镇守洞窟的巨型魔像，拳风与晶雨足以碾平探险者。', tip: '站位拉开，避开震击与弹幕。' }),
 
     /* --- 魔兽巢穴 --- */
-    E('broodling', '巢穴幼魔', 'melee', { family: 'demon', hp: 70, speed: 132, r: 17, dmg: 12, cd: 0.9, range: 38, xp: 9, coin: 2, color: '#a85a72' }),
-    E('ravager', '噬骨魔', 'charger', { family: 'demon', hp: 190, speed: 92, r: 29, dmg: 33, cd: 2.3, range: 50, xp: 21, coin: 4, color: '#8a4a5c' }),
-    E('venomwing', '毒翼', 'ranged', { family: 'wing', hp: 68, speed: 140, r: 18, dmg: 14, cd: 1.7, range: 330, xp: 16, coin: 3, color: '#a06ad0' }),
-    E('queen', '巢穴女王', 'boss', { family: 'demon', hp: 1900, speed: 78, r: 52, dmg: 38, cd: 3.0, range: 100, xp: 300, coin: 55, color: '#b05a8a', summon: 'broodling', summonN: 5, slamR: 260, volley: true })
+    E('broodling', '巢穴幼魔', 'melee', { biome: 'nest', family: 'demon', hp: 70, speed: 132, r: 17, dmg: 12, cd: 0.9, range: 38, xp: 9, coin: 2, color: '#a85a72',
+      desc: '巢穴中最躁动的幼魔，速度极快、成群扑咬。', tip: '高速近战，注意走位。' }),
+    E('ravager', '噬骨魔', 'charger', { biome: 'nest', family: 'demon', hp: 190, speed: 92, r: 29, dmg: 33, cd: 2.3, range: 50, xp: 21, coin: 4, color: '#8a4a5c',
+      desc: '啃食骸骨成长的重型魔兽，冲锋势大力沉。', tip: '高伤冲锋，别硬扛。' }),
+    E('venomwing', '毒翼', 'ranged', { biome: 'nest', family: 'wing', hp: 68, speed: 140, r: 18, dmg: 14, cd: 1.7, range: 330, xp: 16, coin: 3, color: '#a06ad0',
+      desc: '喷吐毒液的翼魔，弹道带腐蚀性光晕。', tip: '远程威胁，优先清理。' }),
+    E('queen', '巢穴女王', 'boss', { biome: 'nest', family: 'demon', hp: 1900, speed: 78, r: 52, dmg: 38, cd: 3.0, range: 100, xp: 300, coin: 55, color: '#b05a8a', summon: 'broodling', summonN: 5, slamR: 260, volley: true,
+      desc: '魔兽巢穴的主宰，不断产下幼魔并以毒雨镇压入侵者。', tip: '终局首领：清召唤、躲震击、抓输出窗口。' })
   ].forEach(function (e) { ENEMY_TYPES[e.key] = e; });
 
   /* ========================================================= 角色属性派生 */
@@ -1948,6 +2072,7 @@
     this.time = 0;
     this.kills = 0;
     this.eliteKills = 0;
+    this.killsByKey = {};
     this.coins = 0;
     this.stones = 0;
     this.upStones = 0;
@@ -2171,6 +2296,9 @@
     e.dying = 0.3;
     this.kills++;
     if (e.elite) this.eliteKills++;
+    var kb = this.killsByKey[e.key] || (this.killsByKey[e.key] = { kills: 0, elites: 0 });
+    kb.kills++;
+    if (e.elite) kb.elites++;
     this.combo++;
     this.comboT = 2.4;
     var p = this.player;
@@ -2318,9 +2446,15 @@
   };
 
   World.prototype.summary = function () {
+    var byKey = {};
+    Object.keys(this.killsByKey).forEach(function (k) {
+      var e = this.killsByKey[k];
+      byKey[k] = { kills: e.kills || 0, elites: e.elites || 0 };
+    }, this);
     return {
       biome: this.biomeKey, biomeName: this.biome.name, floor: this.floor, mlvl: this.mlvl,
       time: this.time, kills: this.kills, eliteKills: this.eliteKills,
+      killsByKey: byKey,
       coins: this.coins, stones: this.stones, upStones: this.upStones, reStones: this.reStones,
       loot: this.loot.slice(),
       level: this.player.level,
@@ -2981,6 +3115,7 @@
   SP.BIOMES = BIOMES;
   SP.BIOME_ORDER = BIOME_ORDER;
   SP.ENEMY_TYPES = ENEMY_TYPES;
+  SP.KIND_LABEL = KIND_LABEL;
   SP.deriveCharacter = deriveCharacter;
   SP.armorReduction = armorReduction;
   SP.xpForLevel = xpForLevel;
@@ -3018,8 +3153,69 @@
       inventory: [],
       progress: { camp: 0, forest: 0, cave: 0, nest: 0 },
       stats: { runs: 0, clears: 0, deaths: 0, bestFloor: {} , kills: 0, lootFound: 0 },
+      bestiary: {},
       created: Date.now()
     };
+  }
+
+  /** 把本局击杀并入图鉴：{ [enemyKey]: { kills, elites } } */
+  function mergeBestiary(ch, killsByKey) {
+    if (!ch || !killsByKey) return;
+    if (!ch.bestiary || typeof ch.bestiary !== 'object') ch.bestiary = {};
+    Object.keys(killsByKey).forEach(function (key) {
+      if (!SP.ENEMY_TYPES[key]) return;
+      var src = killsByKey[key] || {};
+      var addK = Math.max(0, Math.round(Number(src.kills) || 0));
+      var addE = Math.max(0, Math.round(Number(src.elites) || 0));
+      if (addK <= 0 && addE <= 0) return;
+      var dst = ch.bestiary[key];
+      if (!dst) {
+        dst = ch.bestiary[key] = { kills: 0, elites: 0, firstAt: Date.now() };
+      }
+      dst.kills = Math.max(0, Math.round(Number(dst.kills) || 0)) + addK;
+      dst.elites = Math.max(0, Math.round(Number(dst.elites) || 0)) + addE;
+      if (!dst.firstAt) dst.firstAt = Date.now();
+    });
+  }
+
+  function isDiscovered(ch, key) {
+    var e = ch && ch.bestiary && ch.bestiary[key];
+    return !!(e && ((e.kills || 0) > 0 || (e.elites || 0) > 0));
+  }
+
+  /** 图鉴进度：已发现数 / 总数 */
+  function bestiaryProgress(ch) {
+    var total = 0, found = 0;
+    Object.keys(SP.ENEMY_TYPES || {}).forEach(function (key) {
+      total++;
+      if (isDiscovered(ch, key)) found++;
+    });
+    return { found: found, total: total };
+  }
+
+  /** 按群系整理图鉴条目（含未解锁占位） */
+  function bestiaryCatalog(ch) {
+    var out = [];
+    (SP.BIOME_ORDER || []).forEach(function (biomeKey) {
+      var biome = SP.BIOMES[biomeKey];
+      if (!biome) return;
+      var keys = [biome.enemies.melee, biome.enemies.charger, biome.enemies.ranged, biome.enemies.boss];
+      var entries = keys.map(function (key) {
+        var def = SP.ENEMY_TYPES[key];
+        var rec = (ch && ch.bestiary && ch.bestiary[key]) || null;
+        var discovered = !!(rec && ((rec.kills || 0) > 0 || (rec.elites || 0) > 0));
+        return {
+          key: key,
+          def: def,
+          discovered: discovered,
+          kills: discovered ? (rec.kills || 0) : 0,
+          elites: discovered ? (rec.elites || 0) : 0,
+          firstAt: discovered ? (rec.firstAt || 0) : 0
+        };
+      });
+      out.push({ biome: biomeKey, name: biome.name, entries: entries });
+    });
+    return out;
   }
 
   /** 旧版（生存竞技）存档迁移：保留货币与牛排，其余转为材料起步 */
@@ -3253,6 +3449,7 @@
     ch.kills = (ch.kills || 0) + (summary.kills || 0);
     ch.stats.runs = (ch.stats.runs || 0) + 1;
     ch.stats.kills = (ch.stats.kills || 0) + (summary.kills || 0);
+    mergeBestiary(ch, summary.killsByKey);
     if (summary.cleared) {
       ch.stats.clears = (ch.stats.clears || 0) + 1;
       ch.progress[summary.biome] = Math.max(clearedFloor(ch, summary.biome), summary.floor);
@@ -3262,12 +3459,15 @@
       ch.stats.deaths = (ch.stats.deaths || 0) + 1;
     }
     var res = addLoot(ch, summary.loot);
+    var prog = bestiaryProgress(ch);
     return {
       coins: summary.coins || 0, stones: summary.stones || 0,
       upStones: summary.upStones || 0, reStones: summary.reStones || 0,
       lootAdded: res.added, overflow: res.overflow.length,
       cleared: !!summary.cleared,
-      unlocked: unlockedBiomes(ch)
+      unlocked: unlockedBiomes(ch),
+      bestiaryFound: prog.found,
+      bestiaryTotal: prog.total
     };
   }
 
@@ -3323,6 +3523,22 @@
     ['runs', 'clears', 'deaths', 'kills', 'lootFound'].forEach(function (k) {
       ch.stats[k] = Math.max(0, Math.round(num(ch.stats[k])));
     });
+    // 图鉴：清洗未知键与非数字计数
+    var rawB = (ch.bestiary && typeof ch.bestiary === 'object') ? ch.bestiary : {};
+    var cleanB = {};
+    Object.keys(rawB).forEach(function (key) {
+      if (!SP.ENEMY_TYPES[key]) return;
+      var rec = rawB[key] || {};
+      var kills = Math.max(0, Math.round(num(rec.kills)));
+      var elites = Math.max(0, Math.round(num(rec.elites)));
+      if (kills <= 0 && elites <= 0) return;
+      cleanB[key] = {
+        kills: kills,
+        elites: elites,
+        firstAt: Math.max(0, Math.round(num(rec.firstAt, Date.now())))
+      };
+    });
+    ch.bestiary = cleanB;
     // 丢弃结构损坏的装备，避免后续计算炸掉
     ch.inventory = ch.inventory.filter(function (it) { return validItem(it); });
     I.EQUIP_SLOTS.forEach(function (s) {
@@ -3365,7 +3581,11 @@
     maxFloor: maxFloor,
     bankRun: bankRun,
     buySteak: buySteak,
-    buyMysteryItem: buyMysteryItem
+    buyMysteryItem: buyMysteryItem,
+    mergeBestiary: mergeBestiary,
+    isDiscovered: isDiscovered,
+    bestiaryProgress: bestiaryProgress,
+    bestiaryCatalog: bestiaryCatalog
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
@@ -5583,6 +5803,8 @@
     this.bagPick = null;    // 材料或消耗品格子的 key
     this.floorPick = { camp: 0, forest: 0, cave: 0, nest: 0 };
     this.lootFeed = [];
+    this.bestiaryBiome = 'camp';
+    this.bestiarySel = null;
   }
 
   UI.prototype.init = function (hooks) {
@@ -5628,6 +5850,7 @@
     $('#btnBag').addEventListener('click', function () { self.togglePanel('bag'); });
     $('#btnPortal').addEventListener('click', function () { self.togglePanel('portal'); });
     $('#btnRecord').addEventListener('click', function () { self.togglePanel('record'); });
+    $('#btnBestiary').addEventListener('click', function () { self.togglePanel('bestiary'); });
     $('#btnHelp').addEventListener('click', function () { self.togglePanel('help'); });
 
     /* ---- 面板：关闭按钮 / 点遮罩关闭 ---- */
@@ -5716,8 +5939,8 @@
   /* ------------------------------------------------------- 面板（弹窗）管理 */
   var PANEL_IDS = {
     bag: 'panelBag', portal: 'panelPortal', forge: 'panelForge',
-    shop: 'panelShop', record: 'panelRecord', help: 'panelHelp',
-    changelog: 'panelChangelog'
+    shop: 'panelShop', record: 'panelRecord', bestiary: 'panelBestiary',
+    help: 'panelHelp', changelog: 'panelChangelog'
   };
 
   UI.prototype.openPanel = function (key) {
@@ -5754,6 +5977,7 @@
     else if (key === 'forge') this.renderForge();
     else if (key === 'shop') this.renderShop();
     else if (key === 'record') this.renderRecord();
+    else if (key === 'bestiary') this.renderBestiary();
     else if (key === 'changelog') this.renderChangelog();
   };
 
@@ -6720,14 +6944,119 @@
     });
   };
 
+  /* ---------------------------------------------------------------- 图鉴 */
+  UI.prototype.renderBestiary = function () {
+    var self = this;
+    var ch = Accounts.char();
+    var prog = P.bestiaryProgress(ch);
+    var countEl = this.$('bestiaryCount');
+    if (countEl) countEl.textContent = prog.found + ' / ' + prog.total;
+
+    var catalog = P.bestiaryCatalog(ch);
+    var tabs = this.$('bestiaryTabs');
+    tabs.innerHTML = '';
+    if (!SP.BIOMES[this.bestiaryBiome]) this.bestiaryBiome = 'camp';
+
+    catalog.forEach(function (group) {
+      var found = group.entries.filter(function (e) { return e.discovered; }).length;
+      var btn = el('button', 'bag-tab' + (self.bestiaryBiome === group.biome ? ' on' : ''),
+        esc(group.name) + ' <span class="tiny muted">' + found + '/' + group.entries.length + '</span>');
+      btn.type = 'button';
+      btn.addEventListener('click', function () {
+        self.bestiaryBiome = group.biome;
+        self.bestiarySel = null;
+        self.renderBestiary();
+      });
+      tabs.appendChild(btn);
+    });
+
+    var group = catalog.find(function (g) { return g.biome === self.bestiaryBiome; }) || catalog[0];
+    var grid = this.$('bestiaryGrid');
+    grid.innerHTML = '';
+    if (!group) return;
+
+    var stillValid = group.entries.some(function (e) { return e.key === self.bestiarySel; });
+    if (!stillValid) {
+      var firstOpen = group.entries.find(function (e) { return e.discovered; });
+      self.bestiarySel = firstOpen ? firstOpen.key : group.entries[0].key;
+    }
+
+    group.entries.forEach(function (entry) {
+      var def = entry.def || {};
+      var card = el('button',
+        'be-card' + (entry.discovered ? '' : ' locked') + (def.boss ? ' boss' : '') +
+        (self.bestiarySel === entry.key ? ' sel' : ''));
+      card.type = 'button';
+      var name = entry.discovered ? def.name : '？？？';
+      var kind = entry.discovered
+        ? ((SP.KIND_LABEL && SP.KIND_LABEL[def.kind]) || def.kind || '')
+        : '未遭遇';
+      var sub = entry.discovered
+        ? (kind + ' · 击杀 ' + entry.kills + (entry.elites ? '（精英 ' + entry.elites + '）' : ''))
+        : '击败后解锁';
+      card.innerHTML =
+        '<div class="be-portrait" style="background:' + esc(entry.discovered ? (def.color || '#445') : '#222836') + '"></div>' +
+        '<div class="be-meta"><div class="be-name">' + esc(name) + '</div>' +
+        '<div class="be-sub">' + esc(sub) + '</div></div>';
+      card.addEventListener('click', function () {
+        self.bestiarySel = entry.key;
+        self.renderBestiary();
+      });
+      grid.appendChild(card);
+    });
+
+    var sel = group.entries.find(function (e) { return e.key === self.bestiarySel; }) || group.entries[0];
+    this.renderBestiaryDetail(sel);
+  };
+
+  UI.prototype.renderBestiaryDetail = function (entry) {
+    var box = this.$('bestiaryDetail');
+    if (!entry || !entry.def) {
+      box.innerHTML = '<div class="tiny muted">点选左侧条目查看详情</div>';
+      return;
+    }
+    var def = entry.def;
+    if (!entry.discovered) {
+      box.innerHTML =
+        '<div class="bd-head">' +
+        '<div class="bd-portrait" style="background:#222836;filter:grayscale(1) brightness(.45)"></div>' +
+        '<div><div class="bd-title">？？？</div>' +
+        '<div class="bd-tags"><span class="bd-tag">未遭遇</span></div></div></div>' +
+        '<div class="bd-desc">这种怪物尚未被记录。进入对应群系击败它即可解锁图鉴。</div>' +
+        '<div class="bd-tip">所属：' + esc((SP.BIOMES[def.biome] && SP.BIOMES[def.biome].name) || '未知') + '</div>';
+      return;
+    }
+    var kind = (SP.KIND_LABEL && SP.KIND_LABEL[def.kind]) || def.kind;
+    var tags = '<span class="bd-tag">' + esc(kind) + '</span>' +
+      (def.boss ? '<span class="bd-tag boss">首领</span>' : '') +
+      '<span class="bd-tag">' + esc((SP.BIOMES[def.biome] && SP.BIOMES[def.biome].name) || '') + '</span>';
+    box.innerHTML =
+      '<div class="bd-head">' +
+      '<div class="bd-portrait" style="background:' + esc(def.color || '#445') + '"></div>' +
+      '<div><div class="bd-title">' + esc(def.name) + '</div>' +
+      '<div class="bd-tags">' + tags + '</div></div></div>' +
+      '<div class="bd-desc">' + esc(def.desc || '暂无描述。') + '</div>' +
+      (def.tip ? '<div class="bd-tip">作战提示：' + esc(def.tip) + '</div>' : '') +
+      '<div class="bd-stats">' +
+      '<div><span>基准生命</span><b>' + Math.round(def.hp) + '</b></div>' +
+      '<div><span>基准伤害</span><b>' + Math.round(def.dmg) + '</b></div>' +
+      '<div><span>移动速度</span><b>' + Math.round(def.speed) + '</b></div>' +
+      '<div><span>攻击距离</span><b>' + Math.round(def.atkRange) + '</b></div>' +
+      '<div><span>累计击杀</span><b>' + entry.kills + '</b></div>' +
+      '<div><span>精英击杀</span><b>' + entry.elites + '</b></div>' +
+      '</div>';
+  };
+
   /* ---------------------------------------------------------------- 战绩 */
   UI.prototype.renderRecord = function () {
     var ch = Accounts.char();
     var s = ch.stats || {};
     var grid = this.$('recordGrid');
     grid.innerHTML = '';
+    var bp = P.bestiaryProgress(ch);
     [['本轮次数', s.runs || 0], ['通关次数', s.clears || 0], ['阵亡次数', s.deaths || 0],
-     ['累计击杀', s.kills || 0], ['获得装备', s.lootFound || 0], ['角色等级', ch.level]
+     ['累计击杀', s.kills || 0], ['获得装备', s.lootFound || 0], ['角色等级', ch.level],
+     ['图鉴解锁', bp.found + ' / ' + bp.total]
     ].forEach(function (row) {
       grid.appendChild(el('div', 'stat', '<b>' + row[1] + '</b><span>' + row[0] + '</span>'));
     });
@@ -7054,6 +7383,7 @@
         if (k === 'b') { ui.togglePanel('bag'); return; }
         if (k === 'p') { ui.togglePanel('portal'); return; }
         if (k === 'v') { ui.togglePanel('record'); return; }
+        if (k === 'g') { ui.togglePanel('bestiary'); return; }
         if (k === 'h') { ui.togglePanel('help'); return; }
         if (k === 'escape' && ui.isPanelOpen()) { ui.closeAllPanels(); return; }
         return;
@@ -7501,10 +7831,21 @@
           }));
         }
         ui.enterHub();
-        // 支持 #dev-hub:bag / :forge / :shop / :portal 直接打开某个面板（截图用）
+        // 支持 #dev-hub:bag / :forge / :shop / :portal / :bestiary 直接打开某个面板（截图用）
         var sub = hash.split(':')[1];
         if (sub) {
           if (sub === 'forge') ui.selUid = hubCh.equipped.weapon ? hubCh.equipped.weapon.uid : null;
+          if (sub === 'bestiary') {
+            P.mergeBestiary(hubCh, {
+              calf: { kills: 42, elites: 3 },
+              charger: { kills: 18, elites: 1 },
+              bat: { kills: 11, elites: 0 },
+              alpha: { kills: 2, elites: 0 },
+              sporeling: { kills: 9, elites: 0 },
+              thornbeast: { kills: 4, elites: 1 },
+              queen: { kills: 1, elites: 1 }
+            });
+          }
           ui.openPanel(sub);
         }
       } else if (hash === 'dev-loot') {
