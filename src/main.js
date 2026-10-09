@@ -422,7 +422,7 @@
         case 'volley': sound.play('summon'); break;
         case 'boss_wave':
           sound.play('boss');
-          ui.banner('关底首领 · ' + e.data.name, '#ff9c5b');
+          ui.banner('关底首领 · ' + e.data.name, '#ff9c5b', e.data.boss);
           break;
         case 'clear':
           sound.play('bossdown');

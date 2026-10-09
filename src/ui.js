@@ -603,8 +603,9 @@
     opts = opts || {};
     var sizeClass = opts.detail ? 'bd-portrait' : 'be-portrait';
     var src = SP.ItemIcons && SP.ItemIcons.enemyUrl && SP.ItemIcons.enemyUrl(enemyKey);
-    if (opts.discovered && src) {
-      return '<div class="' + sizeClass + ' has-img"><img alt="" draggable="false" src="' + src + '"></div>';
+    if ((opts.discovered || opts.preview) && src) {
+      var extra = opts.preview ? ' bi-boss-portrait' : '';
+      return '<div class="' + sizeClass + extra + ' has-img"><img alt="" draggable="false" src="' + src + '"></div>';
     }
     var bg = opts.discovered
       ? (opts.color || '#445')
@@ -1314,10 +1315,14 @@
         var have = P.clearedFloor(ch, prevKey);
         var pct = need ? Math.max(0, Math.min(100, 100 * have / need)) : 0;
         item.innerHTML =
+          '<div class="bi-head">' +
+          self.enemyPortraitHtml(b.enemies.boss, { preview: true, detail: false }) +
+          '<div class="bi-head-body">' +
           '<div class="bi-top"><div class="bi-name">' + b.name + '</div>' +
           '<span class="bi-flag lock">未解锁</span></div>' +
           '<div class="bi-sub">首领 · ' + esc(bossName) + '</div>' +
           '<div class="bi-sub">通关「' + SP.BIOMES[prevKey].name + '」' + need + ' 层后开启</div>' +
+          '</div></div>' +
           '<div class="bar" title="解锁进度"><i style="width:' + pct.toFixed(0) + '%"></i></div>' +
           '<div class="tiny muted">' + have + ' / ' + need + ' 层</div>';
         wrap.appendChild(item);
@@ -1330,11 +1335,15 @@
       var pick = self.floorPick[key];
       var mlvl = b.mlvlBase + (pick - 1);
       item.innerHTML =
+        '<div class="bi-head">' +
+        self.enemyPortraitHtml(b.enemies.boss, { preview: true, detail: false }) +
+        '<div class="bi-head-body">' +
         '<div class="bi-top"><div class="bi-name">' + b.name + '</div>' +
         '<div class="bi-side">' +
         '<span class="bi-flag' + (pick > cleared ? '' : ' hidden') + '" id="ff-' + key + '">新层</span>' +
         '<div class="bi-mlvl" id="fm-' + key + '">怪物等级 ' + mlvl + '</div></div></div>' +
-        '<div class="bi-sub">首领 · ' + esc(bossName) + ' · 已通关 ' + cleared + ' 层</div>';
+        '<div class="bi-sub">首领 · ' + esc(bossName) + ' · 已通关 ' + cleared + ' 层</div>' +
+        '</div></div>';
 
       if (maxF > 1) {
         var ctrl = el('div', 'floor-ctrl');
@@ -1763,9 +1772,20 @@
     if (boss) {
       bb.classList.add('on');
       if (c.bossName !== boss.name) { c.bossName = boss.name; $('bossName').textContent = boss.name; }
+      if (c.bossKey !== boss.key) {
+        c.bossKey = boss.key;
+        var bUrl = SP.ItemIcons && SP.ItemIcons.enemyUrl(boss.key);
+        var bImg = $('bossPortraitImg');
+        var bWrap = $('bossPortrait');
+        if (bUrl && bImg && bWrap) {
+          bImg.src = bUrl;
+          bWrap.classList.add('has-img');
+        } else if (bWrap) bWrap.classList.remove('has-img');
+      }
       width('bossHpBar', (100 * SP.clamp(boss.hp / boss.maxHp, 0, 1)).toFixed(1) + '%');
     } else if (bb.classList.contains('on')) {
       bb.classList.remove('on');
+      c.bossKey = null;
     }
   };
 
@@ -1807,10 +1827,17 @@
     });
   };
 
-  UI.prototype.banner = function (text, color) {
+  UI.prototype.banner = function (text, color, enemyKey) {
     var e = this.$('banner');
     if (!e) return;
-    e.textContent = text;
+    var mobUrl = enemyKey && SP.ItemIcons && SP.ItemIcons.enemyUrl(enemyKey);
+    if (mobUrl) {
+      e.innerHTML = '<img class="banner-mob" alt="" draggable="false" src="' + mobUrl + '"><span>' + esc(text) + '</span>';
+      e.classList.add('has-mob');
+    } else {
+      e.textContent = text;
+      e.classList.remove('has-mob');
+    }
     e.style.color = color || '#ffb87a';
     e.classList.remove('show');
     void e.offsetWidth;
