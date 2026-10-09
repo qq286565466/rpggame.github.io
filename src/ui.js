@@ -2043,6 +2043,7 @@
     this.slotCd('slotBless', cds.bless);
     this.slotCd('slotDash', cds.dash);
     this.slotCd('slotSteak', cds.steak);
+    /* 装备技能在右下角 #hudGearSkills；未装备时整槽隐藏 */
     var wSlot = this.$('slotWeapon');
     if (wSlot && cds.weapon) {
       wSlot.classList.toggle('hidden', !cds.weapon.ready);

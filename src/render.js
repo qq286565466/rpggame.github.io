@@ -1687,6 +1687,8 @@
 
   /* -------------------------------------------------------------- 小地图 */
   Renderer.prototype.drawMinimap = function (ctx, world) {
+    /* size/pad 与 index.html .hud 的 --minimap-size / --minimap-pad 同步；
+       装备技能条会按同值避让到小地图左侧 */
     var size = 132, pad = 14;
     var mx = this.w - size - pad, my = this.h - size - pad;
     ctx.save();
