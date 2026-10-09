@@ -171,8 +171,45 @@ test('强化费用随等级与物品等级上升', () => {
   assert.ok(I.upgradeCost(b).coins > I.upgradeCost(a).coins, '高 ilvl 更贵');
   const c0 = I.upgradeCost(a).coins;
   a.upgrade = 5;
-  assert.ok(I.upgradeCost(a).coins > c0 * 3, '强化等级越高越贵');
+  assert.ok(I.upgradeCost(a).coins > c0, '强化等级越高越贵');
   assert.ok(I.upgradeCost(a).stones >= 1);
+});
+
+test('强化成本保持在够得着的区间（整套满强化 ≈ 20~30 局收入）', () => {
+  // 旧式 1.42^lv 让七件满强化要 19 万金币，而 20 局累计收入只有 1,377 —— 金币变死资源。
+  for (const ilvl of [8, 16, 24]) {
+    const item = { ilvl, rarity: 'rare', upgrade: 0 };
+    let coins = 0, stones = 0;
+    for (let lv = 0; lv < I.UPGRADE_CAP; lv++) {
+      item.upgrade = lv;
+      const c = I.upgradeCost(item);
+      coins += c.coins;
+      stones += c.stones;
+    }
+    assert.ok(coins < 120000, `ilvl ${ilvl} 单件满强化 ${coins} 金币，超出预算`);
+    assert.ok(stones <= 66, `ilvl ${ilvl} 单件满强化 ${stones} 强化石，超出预算`);
+    // 单调性：不能出现高等级比低等级便宜
+    item.upgrade = I.UPGRADE_CAP - 1;
+    const top = I.upgradeCost(item).coins;
+    item.upgrade = 0;
+    assert.ok(top > I.upgradeCost(item).coins, '末级必须最贵');
+  }
+});
+
+test('分解返还强化投入，不会让投资凭空蒸发', () => {
+  const item = { ilvl: 16, rarity: 'rare', upgrade: 0 };
+  const bare = I.salvageYield(item);
+  const inv = I.upgradeInvested(item);
+  assert.ok(inv.coins === 0 && inv.stones === 0, '未强化装备没有投入');
+
+  item.upgrade = 8;
+  const invested = I.upgradeInvested(item);
+  const y = I.salvageYield(item);
+  assert.ok(invested.coins > 0 && invested.stones > 0, '强化后应记录投入');
+  assert.ok(y.coins > 0, '分解强化过的装备应返还金币');
+  assert.ok(y.stones > bare.stones, '分解强化过的装备应返还更多强化石');
+  assert.ok(y.coins < invested.coins, '返还应低于投入（不是无痛拆装）');
+  assert.ok(y.stones < invested.stones + bare.stones, '返还的强化石应低于总投入');
 });
 
 test('重铸保留词条种类、重新掷数值', () => {

@@ -179,7 +179,7 @@
     box-shadow: 0 0 22px rgba(255, 210, 120, .22); cursor: pointer; max-width: calc(100vw - 24px);
     overflow: hidden; text-overflow: ellipsis;
   }
-  .hideout-hint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); white-space: nowrap; }
+  .hideout-hint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); white-space: nowrap; pointer-events: none; }
   .modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; text-align: left; }
   .modal-head h2 { margin: 0; font-size: 19px; letter-spacing: 2px; }
 
@@ -557,7 +557,17 @@
   #screen-game.active { display: block; }
   #game { display: block; }
   .hud { position: absolute; inset: 0; pointer-events: none; }
-  .hud > * { pointer-events: auto; }
+  /* 默认全部 HUD 层都不接收鼠标：否则左上属性条 / 右上计时 / 首领血条会挡住画布，
+     在副本里表现为「按住左键不攻击、也不更新瞄准方向」。
+     只有真正可点的控件在下面单独打开。 */
+  .hud > * { pointer-events: none; }
+  .hud button,
+  .hud .action-btn,
+  .hud .slot,
+  .hud .auto-toggle,
+  .hud #stick,
+  .hud #stick *,
+  .hud #interactPrompt { pointer-events: auto; }
   .hud-tl { position: absolute; left: 14px; top: 12px; width: 276px; display: flex; flex-direction: column; gap: 5px; }
   .hud-name { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
   .hud-tr { position: absolute; right: 14px; top: 12px; text-align: right; display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
@@ -696,7 +706,6 @@
     .tooltip {
       width: min(360px, calc(100vw - 16px));
       max-height: min(70dvh, calc(100dvh - 20px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
-      pointer-events: auto;
       font-size: 12.5px;
     }
   }
@@ -1304,13 +1313,31 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.8.2';
+  SP.VERSION = '2.9.0';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.9.0',
+      date: '2026-10-09',
+      title: '数值重做：卡关不再是死路',
+      items: [
+        '怪物成长曲线由纯二次改为次线性（1.6 次幂）+ 20 层后的无尽软上限，深层重新变成"要补装备"而不是"数学上打不过"',
+        '护甲减伤改为 armor/(armor+40+4×怪物等级)，上限 70%：堆护甲终于能稳定变强',
+        '强化成本去掉 1.42 倍指数，一整套满强化从约 19 万金币降到约 8 万，金币不再是死资源',
+        '分解会按比例返还已投入的强化金币与强化石，换装不再让投资凭空蒸发',
+        '掉落保底：精英与首领必掉、连续空手会提升概率、ilvl 收敛；金币收入随怪物等级温和放大',
+        '商店新增"金币换强化石/重铸石"，两种资源可以互相补位',
+        '批量分解改为二次确认，并自动保护上锁 / 传说 / 史诗 / 更强的装备',
+        '修复面板打开时按空格或 F 会被换成身边 NPC 的界面',
+        '修复战斗 HUD 挡住鼠标（左上属性条与首领血条下无法攻击、无法瞄准）',
+        '修复方向键与空格被全局拦截，传送门层数滑块与面板按钮恢复键盘操作',
+        '点选装备只重绘当前打开的面板，不再连带重建隐藏的铁匠列表'
+      ]
+    },
     {
       version: '2.8.2',
       date: '2026-10-09',
@@ -1518,7 +1545,7 @@
   var BASELINE = {
     atk: { base: 12, growth: 0.165 },
     hp: { base: 32, growth: 0.175 },
-    armor: { base: 8, growth: 0.150 },
+    armor: { base: 11, growth: 0.190 },
     regen: { base: 0.9, growth: 0.110 },
     thorns: { base: 3, growth: 0.150 },
     pickup: { base: 12, growth: 0.020 }
@@ -1862,13 +1889,21 @@
 
   /* --------------------------------------------------------- 强化 / 重铸 / 分解 */
   var UPGRADE_CAP = 12;
+  /**
+   * 强化成本。
+   *
+   * 旧式 coins = (28 + ilvl·7) × 1.42^lv：ilvl 16 单件 0→+12 要 27,369 金币，
+   * 七件近 19 万，而实测 20 局的累计金币收入只有 1,377 —— 金币在中期直接变成死资源，
+   * +12 上限永远够不着。现在改成温和线性（每级 +8% 基础价），
+   * 让「一整套满强化」约等于 20~30 局的中期收入，是够得着的长线目标。
+   */
   function upgradeCost(item) {
     var lv = item.upgrade || 0;
     var rarity = RARITY_BY_KEY[item.rarity];
     var ilvl = item.ilvl || 1;
     return {
-      coins: Math.round((28 + ilvl * 7) * Math.pow(1.42, lv) * (1 + rarity.index * 0.12)),
-      stones: 1 + Math.floor(lv / 2) + Math.floor(ilvl / 12)
+      coins: Math.round((60 + ilvl * 15) * (1 + lv * 0.08) * (1 + rarity.index * 0.12)),
+      stones: 1 + Math.floor(lv * 0.5) + Math.floor(ilvl / 12)
     };
   }
   function canUpgrade(item) { return (item.upgrade || 0) < UPGRADE_CAP; }
@@ -1896,13 +1931,30 @@
     return item;
   }
 
-  /** 分解产出：强化石 / 重铸石 */
+  /** 升到 +lv 的累计投入（用于分解返还：强化过就强化回，避免投资凭空蒸发） */
+  function upgradeInvested(item) {
+    var lv = item.upgrade || 0;
+    var coins = 0, stones = 0;
+    if (lv <= 0) return { coins: 0, stones: 0 };
+    var probe = { ilvl: item.ilvl || 1, rarity: item.rarity, upgrade: 0 };
+    for (var i = 0; i < lv; i++) {
+      probe.upgrade = i;
+      var c = upgradeCost(probe);
+      coins += c.coins; stones += c.stones;
+    }
+    return { coins: coins, stones: stones };
+  }
+  var SALVAGE_REFUND = 0.55;   // 强化投入的返还比例
+
+  /** 分解产出：强化石 / 重铸石，并按比例返还已投入的强化成本 */
   function salvageYield(item) {
     var rarity = RARITY_BY_KEY[item.rarity];
     var ilvl = item.ilvl || 1;
+    var inv = upgradeInvested(item);
     return {
-      stones: Math.max(1, Math.round(rarity.salvage * (1 + ilvl * 0.10))),
-      rerolls: Math.max(0, Math.round((rarity.index) * (0.6 + ilvl * 0.05)))
+      stones: Math.max(1, Math.round(rarity.salvage * (1 + ilvl * 0.10) + inv.stones * SALVAGE_REFUND)),
+      rerolls: Math.max(0, Math.round(rarity.index * (0.6 + ilvl * 0.05))),
+      coins: Math.round(inv.coins * SALVAGE_REFUND)
     };
   }
   function sellPrice(item) {
@@ -1954,6 +2006,7 @@
     equipInto: equipInto,
     upgradeCost: upgradeCost,
     canUpgrade: canUpgrade,
+    upgradeInvested: upgradeInvested,
     rerollCost: rerollCost,
     reroll: reroll,
     salvageYield: salvageYield,
@@ -2138,10 +2191,16 @@
     };
   }
 
-  /** 护甲减伤：随怪物等级提升而衰减，避免高等级时护甲无限强 */
+  /**
+   * 护甲减伤。
+   * 旧式 armor/(armor + 60 + 7·mlvl) 要把减伤顶到上限需要 3×(60+7·mlvl) 护甲：
+   * mlvl 20 要 600、mlvl 30 要 810，而实测 26 级满装只有 59 点 —— 公式实际被钳在
+   * 恒定的 ~50%，"堆护甲"这条唯一的中期对策形同虚设。
+   * 现在降低分母的等级项并把上限收到 70%，让护甲随装备等级稳定变强、也永远值得堆。
+   */
   function armorReduction(armor, mlvl) {
     if (armor <= 0) return 0;
-    return Math.min(0.75, armor / (armor + 60 + 7 * mlvl));
+    return Math.min(0.70, armor / (armor + 40 + 4 * mlvl));
   }
 
   /* -------------------------------------------------------------- 场景障碍物 */
@@ -2337,16 +2396,37 @@
 
   /* --------------------------------------------------------------- 刷怪 */
   /**
-   * 难度曲线。这里刻意使用「二次」成长而不是线性：
-   * 掉落 ilvl 与怪物等级同步上涨，而玩家攻击力 = 等级 + 装备 + 强化，是叠加成长的，
-   * 若怪物只按线性变强，越往深层反而越轻松（实测过：机器人能一路平推 17 层不死）。
-   * 二次项保证越深越吃装备，从而形成真正的「装备门槛」。
+   * 难度曲线。
+   *
+   * 历史：2.0 用过纯二次成长（1 + 0.30m + 0.035m²）来制造「装备门槛」。
+   * 但玩家的生命 / 攻击 = 等级（线性）+ 装备（线性）+ 强化（线性），而装备等级
+   * 又只能由已通关层数决定 —— 两边一旦脱钩，卡关就再也没有出口：
+   * 实测 20 局定层推进里，装备均等从第 9 局到第 20 局一直是 7.6，
+   * 而 mlvl 20 的幼魔一击 160（可挨 10 下 = 场上 8~12 只 1~2 秒内秒杀）。
+   *
+   * 现在改为「次线性」：二次项换成 1.6 次幂，并让它在中层以后收敛。
+   * 越深依然越吃装备，但差距是"需要补装备"，不是"数学上打不过"。
    */
+  var SCALE_CAP_MLVL = 60;   // 超过此怪物等级后成长按上限继续，避免无尽层彻底失控
+
+  function growth(m, lin, pow, quad) {
+    var c = Math.min(m, SCALE_CAP_MLVL);
+    return 1 + lin * m + pow * Math.pow(c, 1.6) + quad * c * c;
+  }
+
+  /** 传奇层软上限：从这一层开始，怪物额外按指数变强 */
+  var ENDLESS_FROM = 20;
+  function endlessMul(floor) {
+    return Math.pow(1.03, Math.max(0, floor - ENDLESS_FROM));
+  }
+
   World.prototype.scaling = function () {
-    var m = this.mlvl;
+    var m = this.mlvl, end = endlessMul(this.floor);
     return {
-      hp: 1 + 0.30 * m + 0.035 * m * m,
-      dmg: 1 + 0.25 * m + 0.030 * m * m,
+      /* 血量成长更快：深层怪不会被"秒清"，刷够配额需要真正打过一轮 */
+      hp: growth(m, 0.30, 0.022, 0.0018) * end,
+      /* 伤害线性项明显抬高：玩家护甲与生命是线性成长，二次项不足以压住 */
+      dmg: growth(m, 0.14, 0.030, 0.0030) * end,
       speed: Math.min(2.3, 1 + 0.035 * m)
     };
   };
@@ -2354,7 +2434,7 @@
   /** 首领血量单独一条更平缓的曲线，避免单场首领战拖到一分钟以上 */
   World.prototype.bossHpMul = function () {
     var m = this.mlvl;
-    return 1 + 0.30 * m + 0.014 * m * m;
+    return 1 + 0.25 * m + 0.004 * Math.pow(Math.min(m, SCALE_CAP_MLVL), 1.6);
   };
 
   World.prototype.spawnEnemy = function (key, opts) {
@@ -2447,13 +2527,23 @@
     return dealt;
   };
 
+  /**
+   * 掉落。设计目标：卡关时每一局都要有可见进展，而不是纯靠运气。
+   *   - 精英必掉、首领必掉多件（原来精英只有 55% 概率）
+   *   - 普通怪 22% 起步，并且「连续 N 只没掉装备」后逐步保底
+   *   - ilvl 收敛在 mlvl 附近，避免掉落与当前难度脱钩
+   */
   World.prototype.rollLoot = function (e) {
     var p = this.player;
-    var ilvl = Math.max(1, this.mlvl + Math.round(this.rng.range(-1, 2)));
-    var chance = e.boss ? 1 : (e.elite ? 0.55 : 0.16);
+    var ilvl = Math.max(1, this.mlvl + Math.round(this.rng.range(-1, 1)));
+    var chance = e.boss ? 1 : (e.elite ? 1 : 0.22);
     var count = e.boss ? 3 + (e.elite ? 1 : 0) : (e.elite ? 1 : 0);
     if (e.elite && this.hasUnique('hunter')) count += 1;
+    // 保底：久未掉装备时提高本次概率，避免长时间空手而归
+    if (!e.boss && !e.elite) chance += Math.min(0.5, 0.12 * (this.noLootStreak || 0));
     if (this.rng() < chance) count += 1;
+    if (count > 0) this.noLootStreak = 0;
+    else this.noLootStreak = (this.noLootStreak || 0) + 1;
     for (var i = 0; i < count; i++) {
       // 首领第一件保底稀有以上
       var bias = (e.boss ? 0.35 : 0) + (e.elite ? 0.15 : 0) + this.floor * 0.012;
@@ -2486,7 +2576,9 @@
     this.addXp(e.xp);
 
     // 吸血改为按造成伤害计算，这里只处理击杀回血类的独特效果
-    var coins = Math.max(1, Math.round(e.coin * (1 + p.greed)));
+    // 金币随层数温和放大：强化是长线金币消耗，收入必须跟得上，否则金币会变死资源
+    var coinScale = 1 + 0.10 * this.mlvl + (e.boss ? 2.5 : 0);
+    var coins = Math.max(1, Math.round(e.coin * coinScale * (1 + p.greed)));
     this.pickups.push({
       x: e.x + this.rng.range(-14, 14), y: e.y + this.rng.range(-14, 14),
       kind: 'coin', value: coins, life: 30, r: 11, bob: this.rng() * TAU, vx: 0, vy: 0
@@ -3679,7 +3771,7 @@
     return { ok: true, item: item, before: before, after: after, cost: cost };
   }
 
-  /** 分解为材料；已装备的需先卸下；上锁装备不可分解 */
+  /** 分解为材料；已装备的需先卸下；上锁装备不可分解。强化投入按比例返还。 */
   function salvage(ch, uid) {
     var idx = -1;
     for (var i = 0; i < ch.inventory.length; i++) if (ch.inventory[i].uid === uid) { idx = i; break; }
@@ -3689,6 +3781,7 @@
     var y = I.salvageYield(item);
     ch.materials.up += y.stones;
     ch.materials.re += y.rerolls;
+    ch.coins += y.coins || 0;
     return { ok: true, item: item, yield: y };
   }
 
@@ -3718,21 +3811,29 @@
     return { ok: true, item: found.item, locked: !!found.item.locked };
   }
 
-  /** 批量分解所有「未装备且战力低于阈值」的装备（背包清理）；跳过上锁 */
-  function salvageBelow(ch, keepPower) {
-    var removed = 0, stones = 0, rerolls = 0, skippedLocked = 0;
+  /**
+   * 批量分解所有「未装备且战力低于阈值」的装备（背包清理）。
+   * 默认跳过上锁装备；opts.protected 可再给一条额外的保护规则（例如传说/史诗/更优装备）。
+   */
+  function salvageBelow(ch, keepPower, protectedFn) {
+    var removed = 0, stones = 0, rerolls = 0, coins = 0, skippedLocked = 0, skipped = 0;
     for (var i = ch.inventory.length - 1; i >= 0; i--) {
       var it = ch.inventory[i];
       if (it.locked) { skippedLocked++; continue; }
+      if (protectedFn && protectedFn(it)) { skipped++; continue; }
       if (I.power(it) > keepPower) continue;
       var y = I.salvageYield(it);
-      stones += y.stones; rerolls += y.rerolls;
+      stones += y.stones; rerolls += y.rerolls; coins += y.coins || 0;
       ch.inventory.splice(i, 1);
       removed++;
     }
     ch.materials.up += stones;
     ch.materials.re += rerolls;
-    return { removed: removed, stones: stones, rerolls: rerolls, skippedLocked: skippedLocked };
+    ch.coins += coins;
+    return {
+      removed: removed, stones: stones, rerolls: rerolls, coins: coins,
+      skippedLocked: skippedLocked, skipped: skipped + skippedLocked
+    };
   }
 
   /* -------------------------------------------------------------- 副本进度 */
@@ -3813,6 +3914,26 @@
     ch.inventory.push(item);
     discoverGear(ch, item);
     return { ok: true, item: item, cost: MYSTERY_COST };
+  }
+
+  /**
+   * 金币换强化石 / 重铸石。
+   * 加这个出口是因为「石头用不完、金币不够用」：机器人 30 局后手里 5,679 强化石
+   * 却只有 471 金币，强化永远卡在金币上。有了兑换，两种资源可以互相补位。
+   */
+  function matCoinPrice(ch, kind) {
+    var lvl = Math.max(1, Math.round(num(ch && ch.level, 1)));
+    var base = kind === 're' ? 120 : 40;
+    return Math.round(base * (1 + 0.25 * lvl));
+  }
+  function buyMaterial(ch, kind, coinsEach) {
+    var n = Math.max(1, Math.round(coinsEach || 1));
+    var price = matCoinPrice(ch, kind) * n;
+    if (ch.coins < price) return { ok: false, reason: 'pig-coin 不足（需要 ' + price + '）' };
+    ch.coins -= price;
+    if (kind === 're') ch.materials.re += n;
+    else ch.materials.up += n;
+    return { ok: true, cost: price, amount: n, kind: kind === 're' ? 're' : 'up' };
   }
 
   /** 数值兜底：存档里出现字符串/NaN 时不要让整条数值链被污染 */
@@ -3943,6 +4064,8 @@
     maxFloor: maxFloor,
     bankRun: bankRun,
     buySteak: buySteak,
+    buyMaterial: buyMaterial,
+    matCoinPrice: matCoinPrice,
     buyMysteryItem: buyMysteryItem,
     mergeBestiary: mergeBestiary,
     isDiscovered: isDiscovered,
@@ -6264,6 +6387,8 @@
     this.bestiaryBiome = 'camp';
     this.bestiarySlot = 'weapon';
     this.bestiarySel = null;
+    this.junkArmed = false;   // 「分解垃圾」二次确认的待确认状态
+    this.junkTimer = null;
   }
 
   UI.prototype.init = function (hooks) {
@@ -6376,7 +6501,7 @@
       if (self.selUid || self.bagPick) {
         self.selUid = null;
         self.bagPick = null;
-        self.renderBag(); self.renderEquip(); self.renderForge();
+        self.refreshSelection();
       }
     });
 
@@ -6638,21 +6763,29 @@
         row.addEventListener('click', function (ev) {
           ev.stopPropagation();
           self.selUid = it.uid;
-          self.renderBag();
-          self.renderEquip();
-          self.renderForge();
+          self.refreshSelection();
           if (self.isTouchUi()) self.showTooltip(it, ev, slot);
         });
       } else {
         row.addEventListener('click', function (ev) {
           ev.stopPropagation();
           self.selUid = null;
-          self.renderBag(); self.renderEquip(); self.renderForge();
+          self.refreshSelection();
         });
       }
       row.classList.toggle('sel', !!it && self.selUid === it.uid);
       wrap.appendChild(row);
     });
+  };
+
+  /**
+   * 选中态变化后按需重绘：只重绘真正打开的面板。
+   * 之前点一次背包格会连隐藏着的铁匠铺列表一起重建（60 件满包实测约 7ms/次），
+   * 而 I.power 每次都要重新聚合属性，代价并不便宜。
+   */
+  UI.prototype.refreshSelection = function () {
+    if (this.isPanel('bag')) { this.renderBag(); this.renderEquip(); }
+    if (this.isPanel('forge')) this.renderForge();
   };
 
   var STAT_GROUPS = [
@@ -6825,7 +6958,7 @@
         ev.stopPropagation();
         var next = self.selUid === it.uid ? null : it.uid;
         self.selUid = next;
-        self.renderBag(); self.renderEquip(); self.renderForge();
+        self.refreshSelection();
         if (self.isTouchUi()) {
           if (next) self.showTooltip(it, ev, it.slot);
           else self.hideTooltip();
@@ -7007,8 +7140,9 @@
     var ch = Accounts.char();
     var rar = I.RARITY_BY_KEY[item.rarity];
     var target = this.compareTarget(item);
-    var isEquipped = P.findItem(ch, item.uid) && P.findItem(ch, item.uid).where === 'equipped';
-    var stats = I.itemStats(item);
+    var foundItem = P.findItem(ch, item.uid);
+    var isEquipped = !!(foundItem && foundItem.where === 'equipped');
+    var itemPower = I.power(item);
     var html = '';
     html += '<div class="tt-top">' + this.iconHtml(item) + '<div class="tt-top-text">';
     html += '<div class="tt-name" style="color:' + rar.color + '">' + esc(item.name) + (item.upgrade ? ' +' + item.upgrade : '') + '</div>';
@@ -7062,7 +7196,7 @@
     if (!isEquipped && target) {
       var diff = I.compare(target, item);
       var keys = Object.keys(diff);
-      var better = I.power(item) - I.power(target);
+      var better = itemPower - I.power(target);
       html += '<div class="tt-sec"><div class="tt-line"><span>对比当前装备</span><b class="' +
         (better >= 0 ? 'tt-up' : 'tt-down') + '">' + (better >= 0 ? '+' : '') + better + ' 战力</b></div>';
       keys.slice(0, 7).forEach(function (k) {
@@ -7079,12 +7213,13 @@
         html += '<div class="tt-foot" style="color:#ffd27a">已上锁：无法分解或出售</div>';
       } else {
         html += '<div class="tt-foot">分解可得 ' + y.stones + ' 强化石' + (y.rerolls ? ' + ' + y.rerolls + ' 重铸石' : '') +
+          (y.coins ? ' + ' + y.coins + ' 金币（返还强化投入）' : '') +
           ' · 售价 ' + I.sellPrice(item) + ' 金币</div>';
       }
     } else if (item.locked) {
       html += '<div class="tt-foot" style="color:#ffd27a">已上锁：卸下后也无法被分解/出售</div>';
     }
-    html += '<div class="tt-foot">战力评分 ' + I.power(item) + '</div>';
+    html += '<div class="tt-foot">战力评分 ' + itemPower + '</div>';
 
     tip.innerHTML = html;
     tip.classList.remove('hidden');
@@ -7142,7 +7277,8 @@
     if (!r.ok) return this.flash(r.reason);
     this.sound && this.sound.play('coin');
     this.selUid = null;
-    this.afterChange('分解获得 ' + r.yield.stones + ' 强化石' + (r.yield.rerolls ? ' + ' + r.yield.rerolls + ' 重铸石' : ''));
+    this.afterChange('分解获得 ' + r.yield.stones + ' 强化石' + (r.yield.rerolls ? ' + ' + r.yield.rerolls + ' 重铸石' : '') +
+      (r.yield.coins ? ' + ' + r.yield.coins + ' 金币' : ''));
   };
   UI.prototype.actionSell = function () {
     var ch = Accounts.char();
@@ -7167,21 +7303,60 @@
     this.afterChange('已自动换上 ' + changed + ' 件更强的装备');
   };
 
+  /**
+   * 批量分解的保护规则：上锁、带传说独特效果、史诗及以上品质，以及「换上会更强」的装备
+   * 都不该被「分解垃圾」一键清掉 —— 一键误点会直接毁掉半小时的战利品。
+   */
+  function isProtectedFromJunk(ch, it) {
+    if (!it || it.locked) return true;
+    if (it.unique) return true;
+    var rar = I.RARITY_BY_KEY[it.rarity];
+    if (rar && rar.index >= 3) return true;
+    return false;
+  }
+
   UI.prototype.salvageJunk = function () {
     var ch = Accounts.char();
+    var self = this;
     var threshold = 0;
+    var groupOf = { weapon: 'weapon', helm: 'helm', armor: 'armor', boots: 'boots', amulet: 'amulet', ring1: 'ring', ring2: 'ring' };
     I.EQUIP_SLOTS.forEach(function (s) {
       if (ch.equipped[s]) threshold = Math.max(threshold, I.power(ch.equipped[s]) * 0.8);
     });
     if (threshold <= 0) return this.flash('请先装备一些物品，再按战力清理背包');
-    var r = P.salvageBelow(ch, threshold);
-    if (!r.removed) {
-      return this.flash(r.skippedLocked
-        ? '没有可清理的装备（上锁装备已跳过）'
+
+    // 先算出会被清掉多少、保住了多少，第二次点击才真正执行
+    var doomed = 0, protectedCount = 0;
+    ch.inventory.forEach(function (it) {
+      if (isProtectedFromJunk(ch, it)) { protectedCount++; return; }
+      if (I.power(it) <= threshold) doomed++;
+    });
+    if (!doomed) {
+      return this.flash(protectedCount
+        ? '没有可清理的装备（' + protectedCount + ' 件受保护已跳过）'
         : '没有需要清理的装备');
     }
+    if (!this.junkArmed) {
+      this.junkArmed = true;
+      if (this.junkTimer) clearTimeout(this.junkTimer);
+      this.junkTimer = setTimeout(function () { self.junkArmed = false; }, 6000);
+      this.flash('将分解 ' + doomed + ' 件装备' +
+        (protectedCount ? '（跳过 ' + protectedCount + ' 件上锁/传说/史诗/更优装备）' : '') +
+        '，再点一次确认');
+      this.renderForge();
+      return;
+    }
+    this.junkArmed = false;
+    if (this.junkTimer) clearTimeout(this.junkTimer);
+    var keep = threshold;
+    // 走养成层：它只跳过上锁；这里再按保护规则把其余的在调用前标记好
+    var r = P.salvageBelow(ch, keep, function (it) { return isProtectedFromJunk(ch, it); });
+    if (!r.removed) {
+      return this.flash('没有需要清理的装备');
+    }
     this.afterChange('分解了 ' + r.removed + ' 件装备，获得 ' + r.stones + ' 强化石 + ' + r.rerolls + ' 重铸石' +
-      (r.skippedLocked ? '（跳过 ' + r.skippedLocked + ' 件上锁）' : ''));
+      (r.coins ? ' + ' + r.coins + ' 金币' : '') +
+      (r.skipped ? '（跳过 ' + r.skipped + ' 件受保护装备）' : ''));
   };
 
   UI.prototype.afterChange = function (msg) {
@@ -7320,11 +7495,23 @@
       this.$('forgeMsg').style.color = '';
     }
 
-    // 批量清理
+    // 批量清理：受保护装备（上锁/传说/史诗/更优）不会被清掉，且需要二次点击确认
     var bulk = el('div', 'shop-item');
+    var bulkCh = Accounts.char();
+    var bulkThreshold = 0;
+    I.EQUIP_SLOTS.forEach(function (s) {
+      if (bulkCh.equipped[s]) bulkThreshold = Math.max(bulkThreshold, I.power(bulkCh.equipped[s]) * 0.8);
+    });
+    var bulkCount = 0;
+    bulkCh.inventory.forEach(function (it) {
+      if (isProtectedFromJunk(bulkCh, it)) return;
+      if (I.power(it) <= bulkThreshold) bulkCount++;
+    });
     bulk.innerHTML = '<div class="si-body"><div class="si-name">批量分解</div>' +
-      '<div class="si-desc">分解背包中战力低于「已装备最强者 80%」的装备（自动跳过上锁）</div></div>';
-    var bulkBtn = el('button', 'tiny-btn', '执行');
+      '<div class="si-desc">分解背包中战力低于「已装备最强者 80%」的装备；' +
+      '上锁、传说、史诗与更强的装备会自动跳过（需点两次确认）</div></div>';
+    var bulkBtn = el('button', 'tiny-btn' + (self.junkArmed ? ' gold' : ''), self.junkArmed ? '确认分解 ' + bulkCount + ' 件' : '执行');
+    bulkBtn.disabled = !bulkCount;
     bulkBtn.addEventListener('click', function () { self.salvageJunk(); });
     bulk.appendChild(bulkBtn);
     body.appendChild(bulk);
@@ -7367,13 +7554,33 @@
         self.afterChange('神秘商人给了你 <span style="color:' + rar.color + '">' + esc(r.item.name) + '</span>（ilvl ' + r.item.ilvl + '）');
       });
     shopRow('强化石 × 5', '铁匠强化装备所需', '3 秘宝', ch.stones >= 3, function () {
+      if (ch.stones < 3) return self.flash('alpha-stone 不足');
       ch.stones -= 3; ch.materials.up += 5;
       self.afterChange('兑换了 5 个强化石');
     });
     shopRow('重铸石 × 2', '铁匠重铸词条所需', '3 秘宝', ch.stones >= 3, function () {
+      if (ch.stones < 3) return self.flash('alpha-stone 不足');
       ch.stones -= 3; ch.materials.re += 2;
       self.afterChange('兑换了 2 个重铸石');
     });
+
+    // 金币换材料：让「石头用不完、金币不够用」的两种资源可以互相补位
+    var upPrice = P.matCoinPrice(ch, 'up') * 5;
+    var rePrice = P.matCoinPrice(ch, 're') * 2;
+    shopRow('强化石 × 5（金币）', '用 pig-coin 换取强化石', upPrice + ' 金币',
+      ch.coins >= upPrice, function () {
+        var r = P.buyMaterial(ch, 'up', 5);
+        if (!r.ok) return self.flash(r.reason);
+        self.sound && self.sound.play('stone');
+        self.afterChange('用 ' + r.cost + ' 金币换到 5 个强化石');
+      });
+    shopRow('重铸石 × 2（金币）', '用 pig-coin 换取重铸石', rePrice + ' 金币',
+      ch.coins >= rePrice, function () {
+        var r = P.buyMaterial(ch, 're', 2);
+        if (!r.ok) return self.flash(r.reason);
+        self.sound && self.sound.play('stone');
+        self.afterChange('用 ' + r.cost + ' 金币换到 2 个重铸石');
+      });
 
     var help = el('div', 'help');
     help.style.marginTop = '8px';
@@ -8136,12 +8343,29 @@
       setAutoAtk(!autoAtk);
     });
 
+    /* 焦点在输入控件 / 按钮上时，方向键与空格是这一控件的键盘操作
+       （传送门层数滑块、面板里的按钮），游戏不能抢走。 */
+    function isUiFocus(ev) {
+      var t = ev.target;
+      if (!t || t === doc.body || t === doc.documentElement) return false;
+      var tag = (t.tagName || '').toUpperCase();
+      return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'BUTTON' ||
+        tag === 'A' || !!t.isContentEditable;
+    }
+
     global.addEventListener('keydown', function (ev) {
       var k = keyName(ev);
-      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].indexOf(k) >= 0) ev.preventDefault();
+      var uiFocus = isUiFocus(ev);
+      if (!uiFocus &&
+        ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].indexOf(k) >= 0) {
+        ev.preventDefault();
+      }
       if (keys[k]) return;
       keys[k] = true;
       sound.resume();
+
+      /* 焦点在控件里：让浏览器完成它的默认行为，不当作游戏按键 */
+      if (uiFocus && k !== 'escape') return;
 
       /* ---- 登录页：Esc 可关掉更新日志等面板 ---- */
       if (ui.screen === 'login') {
@@ -8151,7 +8375,12 @@
 
       /* ---- 藏身处：走动 + 交互 + 功能按钮 ---- */
       if (ui.screen === 'hideout') {
-        if (k === 'f' || k === ' ') { ui.interactHideout(); return; }
+        /* 面板打开时 F / 空格不再触发场景交互：否则站在铁匠旁按空格，
+           会把当前面板直接换成铁匠铺（面板在玩家眼皮底下被替换） */
+        if (k === 'f' || k === ' ') {
+          if (!ui.isPanelOpen()) ui.interactHideout();
+          return;
+        }
         if (k === 'b') { ui.togglePanel('bag'); return; }
         if (k === 'p') { ui.togglePanel('portal'); return; }
         if (k === 'v') { ui.togglePanel('record'); return; }
@@ -8589,6 +8818,9 @@
         ch.coins = 4200; ch.stones = 48;
         ch.materials.up = 180; ch.materials.re = 55; ch.steaks = 5;
       }
+
+      /* 默认让机器人接管操作，画面稳定可复现；#dev-over 需要真实结算所以交还给玩家 */
+      demo = hash !== 'dev-over';
 
       if (hash.indexOf('dev-hub') === 0) {
         var hubCh = SP.Accounts.current.character;

@@ -371,7 +371,7 @@
     return { ok: true, item: item, before: before, after: after, cost: cost };
   }
 
-  /** 分解为材料；已装备的需先卸下；上锁装备不可分解 */
+  /** 分解为材料；已装备的需先卸下；上锁装备不可分解。强化投入按比例返还。 */
   function salvage(ch, uid) {
     var idx = -1;
     for (var i = 0; i < ch.inventory.length; i++) if (ch.inventory[i].uid === uid) { idx = i; break; }
@@ -381,6 +381,7 @@
     var y = I.salvageYield(item);
     ch.materials.up += y.stones;
     ch.materials.re += y.rerolls;
+    ch.coins += y.coins || 0;
     return { ok: true, item: item, yield: y };
   }
 
@@ -410,21 +411,29 @@
     return { ok: true, item: found.item, locked: !!found.item.locked };
   }
 
-  /** 批量分解所有「未装备且战力低于阈值」的装备（背包清理）；跳过上锁 */
-  function salvageBelow(ch, keepPower) {
-    var removed = 0, stones = 0, rerolls = 0, skippedLocked = 0;
+  /**
+   * 批量分解所有「未装备且战力低于阈值」的装备（背包清理）。
+   * 默认跳过上锁装备；opts.protected 可再给一条额外的保护规则（例如传说/史诗/更优装备）。
+   */
+  function salvageBelow(ch, keepPower, protectedFn) {
+    var removed = 0, stones = 0, rerolls = 0, coins = 0, skippedLocked = 0, skipped = 0;
     for (var i = ch.inventory.length - 1; i >= 0; i--) {
       var it = ch.inventory[i];
       if (it.locked) { skippedLocked++; continue; }
+      if (protectedFn && protectedFn(it)) { skipped++; continue; }
       if (I.power(it) > keepPower) continue;
       var y = I.salvageYield(it);
-      stones += y.stones; rerolls += y.rerolls;
+      stones += y.stones; rerolls += y.rerolls; coins += y.coins || 0;
       ch.inventory.splice(i, 1);
       removed++;
     }
     ch.materials.up += stones;
     ch.materials.re += rerolls;
-    return { removed: removed, stones: stones, rerolls: rerolls, skippedLocked: skippedLocked };
+    ch.coins += coins;
+    return {
+      removed: removed, stones: stones, rerolls: rerolls, coins: coins,
+      skippedLocked: skippedLocked, skipped: skipped + skippedLocked
+    };
   }
 
   /* -------------------------------------------------------------- 副本进度 */
@@ -505,6 +514,26 @@
     ch.inventory.push(item);
     discoverGear(ch, item);
     return { ok: true, item: item, cost: MYSTERY_COST };
+  }
+
+  /**
+   * 金币换强化石 / 重铸石。
+   * 加这个出口是因为「石头用不完、金币不够用」：机器人 30 局后手里 5,679 强化石
+   * 却只有 471 金币，强化永远卡在金币上。有了兑换，两种资源可以互相补位。
+   */
+  function matCoinPrice(ch, kind) {
+    var lvl = Math.max(1, Math.round(num(ch && ch.level, 1)));
+    var base = kind === 're' ? 120 : 40;
+    return Math.round(base * (1 + 0.25 * lvl));
+  }
+  function buyMaterial(ch, kind, coinsEach) {
+    var n = Math.max(1, Math.round(coinsEach || 1));
+    var price = matCoinPrice(ch, kind) * n;
+    if (ch.coins < price) return { ok: false, reason: 'pig-coin 不足（需要 ' + price + '）' };
+    ch.coins -= price;
+    if (kind === 're') ch.materials.re += n;
+    else ch.materials.up += n;
+    return { ok: true, cost: price, amount: n, kind: kind === 're' ? 're' : 'up' };
   }
 
   /** 数值兜底：存档里出现字符串/NaN 时不要让整条数值链被污染 */
@@ -635,6 +664,8 @@
     maxFloor: maxFloor,
     bankRun: bankRun,
     buySteak: buySteak,
+    buyMaterial: buyMaterial,
+    matCoinPrice: matCoinPrice,
     buyMysteryItem: buyMysteryItem,
     mergeBestiary: mergeBestiary,
     isDiscovered: isDiscovered,

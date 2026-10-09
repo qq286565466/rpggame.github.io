@@ -65,7 +65,7 @@
   var BASELINE = {
     atk: { base: 12, growth: 0.165 },
     hp: { base: 32, growth: 0.175 },
-    armor: { base: 8, growth: 0.150 },
+    armor: { base: 11, growth: 0.190 },
     regen: { base: 0.9, growth: 0.110 },
     thorns: { base: 3, growth: 0.150 },
     pickup: { base: 12, growth: 0.020 }
@@ -409,13 +409,21 @@
 
   /* --------------------------------------------------------- 强化 / 重铸 / 分解 */
   var UPGRADE_CAP = 12;
+  /**
+   * 强化成本。
+   *
+   * 旧式 coins = (28 + ilvl·7) × 1.42^lv：ilvl 16 单件 0→+12 要 27,369 金币，
+   * 七件近 19 万，而实测 20 局的累计金币收入只有 1,377 —— 金币在中期直接变成死资源，
+   * +12 上限永远够不着。现在改成温和线性（每级 +8% 基础价），
+   * 让「一整套满强化」约等于 20~30 局的中期收入，是够得着的长线目标。
+   */
   function upgradeCost(item) {
     var lv = item.upgrade || 0;
     var rarity = RARITY_BY_KEY[item.rarity];
     var ilvl = item.ilvl || 1;
     return {
-      coins: Math.round((28 + ilvl * 7) * Math.pow(1.42, lv) * (1 + rarity.index * 0.12)),
-      stones: 1 + Math.floor(lv / 2) + Math.floor(ilvl / 12)
+      coins: Math.round((60 + ilvl * 15) * (1 + lv * 0.08) * (1 + rarity.index * 0.12)),
+      stones: 1 + Math.floor(lv * 0.5) + Math.floor(ilvl / 12)
     };
   }
   function canUpgrade(item) { return (item.upgrade || 0) < UPGRADE_CAP; }
@@ -443,13 +451,30 @@
     return item;
   }
 
-  /** 分解产出：强化石 / 重铸石 */
+  /** 升到 +lv 的累计投入（用于分解返还：强化过就强化回，避免投资凭空蒸发） */
+  function upgradeInvested(item) {
+    var lv = item.upgrade || 0;
+    var coins = 0, stones = 0;
+    if (lv <= 0) return { coins: 0, stones: 0 };
+    var probe = { ilvl: item.ilvl || 1, rarity: item.rarity, upgrade: 0 };
+    for (var i = 0; i < lv; i++) {
+      probe.upgrade = i;
+      var c = upgradeCost(probe);
+      coins += c.coins; stones += c.stones;
+    }
+    return { coins: coins, stones: stones };
+  }
+  var SALVAGE_REFUND = 0.55;   // 强化投入的返还比例
+
+  /** 分解产出：强化石 / 重铸石，并按比例返还已投入的强化成本 */
   function salvageYield(item) {
     var rarity = RARITY_BY_KEY[item.rarity];
     var ilvl = item.ilvl || 1;
+    var inv = upgradeInvested(item);
     return {
-      stones: Math.max(1, Math.round(rarity.salvage * (1 + ilvl * 0.10))),
-      rerolls: Math.max(0, Math.round((rarity.index) * (0.6 + ilvl * 0.05)))
+      stones: Math.max(1, Math.round(rarity.salvage * (1 + ilvl * 0.10) + inv.stones * SALVAGE_REFUND)),
+      rerolls: Math.max(0, Math.round(rarity.index * (0.6 + ilvl * 0.05))),
+      coins: Math.round(inv.coins * SALVAGE_REFUND)
     };
   }
   function sellPrice(item) {
@@ -501,6 +526,7 @@
     equipInto: equipInto,
     upgradeCost: upgradeCost,
     canUpgrade: canUpgrade,
+    upgradeInvested: upgradeInvested,
     rerollCost: rerollCost,
     reroll: reroll,
     salvageYield: salvageYield,

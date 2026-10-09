@@ -179,7 +179,7 @@
     box-shadow: 0 0 22px rgba(255, 210, 120, .22); cursor: pointer; max-width: calc(100vw - 24px);
     overflow: hidden; text-overflow: ellipsis;
   }
-  .hideout-hint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); white-space: nowrap; }
+  .hideout-hint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); white-space: nowrap; pointer-events: none; }
   .modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; text-align: left; }
   .modal-head h2 { margin: 0; font-size: 19px; letter-spacing: 2px; }
 
@@ -557,7 +557,17 @@
   #screen-game.active { display: block; }
   #game { display: block; }
   .hud { position: absolute; inset: 0; pointer-events: none; }
-  .hud > * { pointer-events: auto; }
+  /* 默认全部 HUD 层都不接收鼠标：否则左上属性条 / 右上计时 / 首领血条会挡住画布，
+     在副本里表现为「按住左键不攻击、也不更新瞄准方向」。
+     只有真正可点的控件在下面单独打开。 */
+  .hud > * { pointer-events: none; }
+  .hud button,
+  .hud .action-btn,
+  .hud .slot,
+  .hud .auto-toggle,
+  .hud #stick,
+  .hud #stick *,
+  .hud #interactPrompt { pointer-events: auto; }
   .hud-tl { position: absolute; left: 14px; top: 12px; width: 276px; display: flex; flex-direction: column; gap: 5px; }
   .hud-name { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
   .hud-tr { position: absolute; right: 14px; top: 12px; text-align: right; display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
@@ -696,7 +706,6 @@
     .tooltip {
       width: min(360px, calc(100vw - 16px));
       max-height: min(70dvh, calc(100dvh - 20px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
-      pointer-events: auto;
       font-size: 12.5px;
     }
   }
