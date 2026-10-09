@@ -276,6 +276,32 @@ test('各部位都能独立生成，且主属性符合部位定位', () => {
   }
 });
 
+test('武器基础型号覆盖八种，并各自对应攻击档案', () => {
+  const keys = I.BASES.weapon.map((b) => b.key);
+  assert.deepEqual(keys.slice().sort(), ['axe', 'bow', 'dagger', 'flail', 'maul', 'spear', 'staff', 'sword']);
+  for (const key of keys) {
+    const wp = I.weaponProfile(key);
+    assert.equal(wp.key, key);
+    assert.ok(wp.style && wp.label && wp.range > 0 && wp.arc > 0, key + ' 档案不完整');
+  }
+  assert.equal(I.weaponProfile('bow').style, 'shot');
+  assert.equal(I.weaponProfile('staff').pierce, 2);
+  assert.ok(I.weaponProfile('spear').range > I.weaponProfile('sword').range);
+});
+
+test('随机武器会落到新型号上，且保留 base 字段', () => {
+  const rng = SP.makeRng(19);
+  const seen = new Set();
+  for (let i = 0; i < 400; i++) {
+    const it = I.roll(rng, { ilvl: 18, slot: 'weapon' });
+    assert.ok(it.base, '武器应带 base');
+    seen.add(it.base);
+  }
+  for (const need of ['spear', 'bow', 'staff', 'flail']) {
+    assert.ok(seen.has(need), '抽样中应出现 ' + need);
+  }
+});
+
 console.log('\n时空猪 · 装备系统测试\n' + out.join('\n'));
 console.log(`\n通过 ${pass} / ${pass + fail}` + (fail ? `  ✗ 失败 ${fail}` : '  ✓ 全部通过'));
 process.exit(fail ? 1 : 0);

@@ -124,6 +124,9 @@
     if (has('greedheart')) { greed += 0.25; luck += 0.25; }
     if (has('vampiric')) lifesteal *= 2;
 
+    var weapon = (ch.equipped && ch.equipped.weapon) || null;
+    var wpn = SP.Items.weaponProfile(weapon);
+
     return {
       level: lv,
       damage: atk,
@@ -141,7 +144,8 @@
       luck: luck,
       skillDmg: skillDmg,
       cdr: cdr,
-      uniques: uniq
+      uniques: uniq,
+      weapon: wpn
     };
   }
 
@@ -213,11 +217,13 @@
     this.character = opts.character || null;
     this.stats = stats;
 
+    var wpn = stats.weapon || SP.Items.weaponProfile(null);
     var p = this.player = {
       x: 0, y: 0, vx: 0, vy: 0, r: 18, facing: -Math.PI / 2,
       damage: stats.damage, maxHp: stats.maxHp, hp: stats.maxHp,
       speed: stats.speed, attackSpeed: stats.attackSpeed,
-      range: 88, arcWidth: 1.9, crit: stats.crit, critMult: stats.critMult,
+      range: wpn.range, arcWidth: wpn.arc, weapon: wpn,
+      crit: stats.crit, critMult: stats.critMult,
       armor: stats.armor, lifesteal: stats.lifesteal, regen: stats.regen,
       thorns: stats.thorns, magnet: stats.magnet, greed: stats.greed,
       luck: stats.luck, skillDmg: stats.skillDmg, cdr: stats.cdr,
@@ -636,33 +642,114 @@
   World.prototype.tryAttack = function (aimAngle) {
     var p = this.player;
     if (p.atkCd > 0) return;
+    var wp = p.weapon || SP.Items.weaponProfile(null);
     p.atkCd = 1 / p.attackSpeed;
-    p.swingT = 0.24;
+    p.swingT = wp.swingT;
     p.swingDir = aimAngle;
-    this.slash(p.x, p.y, aimAngle, p.range, p.arcWidth, 0.24);
-    this.emit('attack', {});
-    var hits = [], i;
-    for (i = 0; i < this.enemies.length; i++) {
-      var e = this.enemies[i];
-      if (e.dying > 0) continue;
-      var d = dist(p.x, p.y, e.x, e.y);
-      if (d > p.range + e.r) continue;
-      var ang = Math.atan2(e.y - p.y, e.x - p.x);
-      if (Math.abs(angleDiff(aimAngle, ang)) > p.arcWidth / 2 + Math.min(0.35, e.r / 60)) continue;
-      hits.push({ e: e, d: d, ang: ang });
+    this.emit('attack', { style: wp.style, key: wp.key });
+
+    if (wp.style === 'shot' || wp.style === 'bolt') {
+      this.fireWeaponShot(aimAngle, wp);
+      return;
     }
-    hits.sort(function (a, b) { return a.d - b.d; });
-    for (i = 0; i < hits.length && i < 3; i++) this.hitEnemyWithAttack(hits[i].e, hits[i].ang);
+
+    // 近战特效：回旋画满圈，突刺用窄扇形，砸击额外震波
+    var fxArc = wp.style === 'spin' ? Math.min(wp.arc, TAU) : wp.arc;
+    this.slash(p.x, p.y, aimAngle, p.range, fxArc, wp.swingT);
+    if (wp.style === 'smash' && wp.smashR > 0) {
+      this.ring(p.x, p.y, 10, wp.smashR, 0.28, '#ffd29a', 4);
+    }
+
+    var bursts = Math.max(1, wp.bursts || 1);
+    var b;
+    for (b = 0; b < bursts; b++) {
+      var a = aimAngle + (bursts > 1 ? (b - (bursts - 1) / 2) * 0.18 : 0);
+      this.resolveMeleeSwing(a, wp, b === 0 ? 1 : 0.72);
+    }
   };
 
-  World.prototype.hitEnemyWithAttack = function (e, ang) {
+  /** 按武器档案结算一次近战挥砍/突刺/砸击/回旋。 */
+  World.prototype.resolveMeleeSwing = function (aimAngle, wp, dmgScale) {
     var p = this.player;
+    var hits = [], i, e, d, ang;
+    var ignoreArc = wp.style === 'spin';
+    for (i = 0; i < this.enemies.length; i++) {
+      e = this.enemies[i];
+      if (e.dying > 0) continue;
+      d = dist(p.x, p.y, e.x, e.y);
+      if (d > p.range + e.r) continue;
+      ang = Math.atan2(e.y - p.y, e.x - p.x);
+      if (!ignoreArc) {
+        var half = p.arcWidth / 2 + Math.min(0.35, e.r / 60);
+        if (Math.abs(angleDiff(aimAngle, ang)) > half) continue;
+      }
+      hits.push({ e: e, d: d, ang: ang, via: 'arc' });
+    }
+    // 砸击：扇形外、震波半径内的敌人吃到较低伤害
+    if (wp.style === 'smash' && wp.smashR > 0) {
+      for (i = 0; i < this.enemies.length; i++) {
+        e = this.enemies[i];
+        if (e.dying > 0) continue;
+        d = dist(p.x, p.y, e.x, e.y);
+        if (d > wp.smashR + e.r) continue;
+        ang = Math.atan2(e.y - p.y, e.x - p.x);
+        var already = false;
+        for (var h = 0; h < hits.length; h++) if (hits[h].e === e) { already = true; break; }
+        if (!already) hits.push({ e: e, d: d, ang: ang, via: 'smash', scale: 0.55 });
+      }
+    }
+    hits.sort(function (a, b) { return a.d - b.d; });
+    var cap = wp.maxHits || 3;
+    for (i = 0; i < hits.length && i < cap; i++) {
+      var scale = (hits[i].scale || 1) * (dmgScale || 1);
+      this.hitEnemyWithAttack(hits[i].e, hits[i].ang, {
+        dmgScale: scale,
+        knock: wp.knock,
+        stun: wp.style === 'smash' ? (hits[i].e.boss ? 0.15 : 0.28) : (hits[i].e.boss ? 0 : 0.12)
+      });
+    }
+  };
+
+  World.prototype.fireWeaponShot = function (aimAngle, wp) {
+    var p = this.player;
+    var color = wp.style === 'bolt' ? '#9ad8ff' : '#ffe0a0';
+    // 杖/弓出手时给一点枪口闪光
+    this.burst(
+      p.x + Math.cos(aimAngle) * 22,
+      p.y + Math.sin(aimAngle) * 22,
+      6, color, 90, 0.25, 2.4
+    );
+    this.projectiles.push({
+      x: p.x + Math.cos(aimAngle) * 18,
+      y: p.y + Math.sin(aimAngle) * 18,
+      vx: Math.cos(aimAngle) * wp.projSpeed,
+      vy: Math.sin(aimAngle) * wp.projSpeed,
+      r: wp.projR,
+      dmg: p.damage * (wp.dmgMul || 1),
+      life: 2.6,
+      friendly: true,
+      color: color,
+      pierce: Math.max(1, wp.pierce || 1),
+      knock: wp.knock || 70,
+      style: wp.style,
+      hitIds: {}
+    });
+  };
+
+  World.prototype.hitEnemyWithAttack = function (e, ang, opts) {
+    opts = opts || {};
+    var p = this.player;
+    var wp = p.weapon || SP.Items.weaponProfile(null);
     var crit = this.rng() < p.crit;
     var mul = p.dmgBuffT > 0 ? p.dmgBuffMul : 1;
     if (this.hasUnique('berserk') && p.hp / p.maxHp < 0.40) mul *= 1.4;
+    mul *= (wp.dmgMul || 1) * (opts.dmgScale || 1);
     var dmg = p.damage * mul * (crit ? p.critMult : 1);
     var dealt = this.damageEnemy(e, dmg, {
-      crit: crit, knock: 130, knockAngle: ang, stun: e.boss ? 0 : 0.12
+      crit: crit,
+      knock: opts.knock != null ? opts.knock : (wp.knock || 130),
+      knockAngle: ang,
+      stun: opts.stun != null ? opts.stun : (e.boss ? 0 : 0.12)
     });
     this.applyLifesteal(dealt);
   };
@@ -998,7 +1085,34 @@
       pr.y += pr.vy * dt;
       pr.life -= dt;
       var hit = false;
-      if (!pr.friendly && SP.dist(pr.x, pr.y, p.x, p.y) < pr.r + p.r) {
+      if (pr.friendly) {
+        // 玩家弹道：命中敌人；可穿透若干目标
+        if (!pr.hitIds) pr.hitIds = {};
+        for (var ei = 0; ei < this.enemies.length; ei++) {
+          var e = this.enemies[ei];
+          if (e.dying > 0) continue;
+          var id = e.x.toFixed(2) + ':' + e.y.toFixed(2) + ':' + e.key + ':' + (e.boss ? 'b' : 'n');
+          // 用对象身份更稳：挂临时标记
+          if (!e._pid) e._pid = 'e' + (this._pidSeq = (this._pidSeq || 0) + 1);
+          if (pr.hitIds[e._pid]) continue;
+          if (SP.dist(pr.x, pr.y, e.x, e.y) >= pr.r + e.r) continue;
+          pr.hitIds[e._pid] = true;
+          var ang = Math.atan2(e.y - p.y, e.x - p.x);
+          var crit = this.rng() < p.crit;
+          var mul = p.dmgBuffT > 0 ? p.dmgBuffMul : 1;
+          if (this.hasUnique('berserk') && p.hp / p.maxHp < 0.40) mul *= 1.4;
+          var dmg = pr.dmg * mul * (crit ? p.critMult : 1);
+          // 法杖弹道吃技能伤害加成
+          if (pr.style === 'bolt') dmg *= (1 + p.skillDmg);
+          var dealt = this.damageEnemy(e, dmg, {
+            crit: crit, knock: pr.knock || 70, knockAngle: ang, stun: e.boss ? 0 : 0.08
+          });
+          this.applyLifesteal(dealt);
+          this.burst(pr.x, pr.y, 7, pr.color, 120, 0.3, 2.8);
+          pr.pierce = (pr.pierce || 1) - 1;
+          if (pr.pierce <= 0) { hit = true; break; }
+        }
+      } else if (SP.dist(pr.x, pr.y, p.x, p.y) < pr.r + p.r) {
         this.hurtPlayer(pr.dmg, pr.x, pr.y);
         this.burst(pr.x, pr.y, 8, pr.color, 130, 0.35, 3);
         hit = true;

@@ -872,6 +872,20 @@
     html += '<div class="tt-name" style="color:' + rar.color + '">' + esc(item.name) + (item.upgrade ? ' +' + item.upgrade : '') + '</div>';
     html += '<div class="tt-sub">' + rar.name + ' · ' + I.SLOT_META[item.slot].name + ' · 物品等级 ' + item.ilvl +
       (isEquipped ? ' · <b style="color:var(--cyan)">已装备</b>' : '') + '</div></div></div>';
+    if (item.slot === 'weapon') {
+      var wp = I.weaponProfile(item);
+      html += '<div class="tt-sec"><div class="tt-line"><span>攻击方式</span><b style="color:#ffe9a8">' +
+        esc(wp.label) + '</b></div>' +
+        '<div class="tiny muted">射程 ' + Math.round(wp.range) +
+        (wp.style === 'shot' || wp.style === 'bolt'
+          ? ' · 远程弹道' + (wp.pierce > 1 ? '（穿透 ' + wp.pierce + '）' : '')
+          : wp.style === 'spin' ? ' · 环身回旋'
+          : wp.style === 'smash' ? ' · 附带震波'
+          : wp.style === 'thrust' || wp.style === 'stab' ? ' · 窄角度突刺'
+          : wp.style === 'cleave' ? ' · 宽扇横劈'
+          : ' · 扇形挥砍') +
+        '</div></div>';
+    }
 
     // 基础属性（不含词条）
     var perKey = {};

@@ -463,6 +463,82 @@ test('自动选敌：忽略濒死与尚未现身的怪，超出锁敌半径则�
   assert.equal(SP.pickAutoTarget(w, p, 300), null, '超出锁敌半径不应锁定');
 });
 
+function applyWeapon(w, key) {
+  const wp = I.weaponProfile(key);
+  w.player.weapon = wp;
+  w.player.range = wp.range;
+  w.player.arcWidth = wp.arc;
+  return wp;
+}
+
+test('链锤回旋能命中身后敌人', () => {
+  const w = makeWorld({ seed: 21 });
+  w.enemies.length = 0;
+  applyWeapon(w, 'flail');
+  const behind = w.spawnEnemy('calf');
+  behind.x = w.player.x - 50; behind.y = w.player.y; behind.spawnT = 0;
+  const hp0 = behind.hp;
+  w.player.crit = 0; w.player.atkCd = 0;
+  w.tryAttack(0);
+  assert.ok(behind.hp < hp0, '回旋应打到身后');
+});
+
+test('长枪突刺射程长于短剑，窄角打不到侧方', () => {
+  const w = makeWorld({ seed: 22 });
+  w.enemies.length = 0;
+  applyWeapon(w, 'spear');
+  const far = w.spawnEnemy('calf');
+  far.x = w.player.x + 110; far.y = w.player.y; far.spawnT = 0; far.hp = far.maxHp = 1e9;
+  const side = w.spawnEnemy('calf');
+  side.x = w.player.x + 40; side.y = w.player.y + 70; side.spawnT = 0;
+  const f0 = far.hp, s0 = side.hp;
+  w.player.crit = 0; w.player.atkCd = 0;
+  w.tryAttack(0);
+  assert.ok(far.hp < f0, '长枪应打到 110 距离外的正前方');
+  assert.equal(side.hp, s0, '长枪窄角不应打到侧方');
+});
+
+test('短弓开火产生友方弹道并在命中后造成伤害', () => {
+  const w = makeWorld({ seed: 23 });
+  w.enemies.length = 0;
+  applyWeapon(w, 'bow');
+  const e = w.spawnEnemy('calf');
+  e.x = w.player.x + 180; e.y = w.player.y; e.spawnT = 0; e.hp = e.maxHp = 1e9;
+  const before = w.projectiles.length;
+  w.player.crit = 0; w.player.atkCd = 0; w.player.damage = 40;
+  w.tryAttack(0);
+  assert.ok(w.projectiles.length > before, '应发射箭矢');
+  assert.equal(w.projectiles[w.projectiles.length - 1].friendly, true);
+  const hp0 = e.hp;
+  for (let i = 0; i < 90 && e.hp === hp0; i++) w.updateProjectiles(1 / 60);
+  assert.ok(e.hp < hp0, '箭矢命中应造成伤害');
+});
+
+test('法杖奥术弹可穿透两名敌人', () => {
+  const w = makeWorld({ seed: 24 });
+  w.enemies.length = 0;
+  applyWeapon(w, 'staff');
+  const a = w.spawnEnemy('calf'); a.x = w.player.x + 90; a.y = w.player.y; a.spawnT = 0; a.hp = a.maxHp = 1e9;
+  const b = w.spawnEnemy('calf'); b.x = w.player.x + 160; b.y = w.player.y; b.spawnT = 0; b.hp = b.maxHp = 1e9;
+  w.player.crit = 0; w.player.atkCd = 0; w.player.damage = 30; w.player.skillDmg = 0;
+  w.tryAttack(0);
+  const a0 = a.hp, b0 = b.hp;
+  for (let i = 0; i < 120; i++) w.updateProjectiles(1 / 60);
+  assert.ok(a.hp < a0 && b.hp < b0, '穿透弹应打到两名排成一线的敌人');
+});
+
+test('重锤砸击能波及扇形外的近身敌人', () => {
+  const w = makeWorld({ seed: 25 });
+  w.enemies.length = 0;
+  applyWeapon(w, 'maul');
+  const side = w.spawnEnemy('calf');
+  side.x = w.player.x; side.y = w.player.y + 40; side.spawnT = 0;
+  const hp0 = side.hp;
+  w.player.crit = 0; w.player.atkCd = 0;
+  w.tryAttack(0); // 朝右挥，侧方靠震波
+  assert.ok(side.hp < hp0, '砸击震波应打到侧方近身敌人');
+});
+
 console.log('\n时空猪 · 战斗与副本逻辑测试\n' + out.join('\n'));
 console.log(`\n通过 ${pass} / ${pass + fail}` + (fail ? `  ✗ 失败 ${fail}` : '  ✓ 全部通过'));
 process.exit(fail ? 1 : 0);

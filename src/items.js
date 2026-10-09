@@ -110,13 +110,55 @@
   var AFFIX_BY_KEY = {};
   AFFIXES.forEach(function (a) { AFFIX_BY_KEY[a.key] = a; });
 
+  /**
+   * 武器攻击方式档案：决定普攻形态（扇形斩 / 突刺 / 砸击 / 旋转 / 远程弹道）。
+   * range 单位与场景坐标一致；arc 为弧度；dmgMul 叠在角色攻击力上。
+   */
+  var WEAPON_PROFILES = {
+    sword: { style: 'slash', label: '挥砍', range: 88, arc: 1.90, maxHits: 3, knock: 130, swingT: 0.24, dmgMul: 1.00 },
+    axe: { style: 'cleave', label: '横劈', range: 84, arc: 2.55, maxHits: 4, knock: 165, swingT: 0.28, dmgMul: 1.06 },
+    dagger: { style: 'stab', label: '连刺', range: 68, arc: 0.85, maxHits: 2, knock: 85, swingT: 0.15, dmgMul: 0.90, bursts: 2 },
+    maul: { style: 'smash', label: '砸击', range: 74, arc: 1.15, maxHits: 4, knock: 250, swingT: 0.34, dmgMul: 1.16, smashR: 58 },
+    spear: { style: 'thrust', label: '突刺', range: 128, arc: 0.70, maxHits: 3, knock: 145, swingT: 0.22, dmgMul: 1.02 },
+    bow: { style: 'shot', label: '射箭', range: 340, arc: 0.32, maxHits: 1, knock: 70, swingT: 0.18, dmgMul: 0.96, projSpeed: 560, projR: 5.5, pierce: 1 },
+    staff: { style: 'bolt', label: '奥术弹', range: 280, arc: 0.48, maxHits: 1, knock: 55, swingT: 0.22, dmgMul: 0.90, projSpeed: 430, projR: 7.5, pierce: 2 },
+    flail: { style: 'spin', label: '回旋', range: 94, arc: Math.PI * 2, maxHits: 5, knock: 155, swingT: 0.30, dmgMul: 0.84 }
+  };
+  var DEFAULT_WEAPON_PROFILE = WEAPON_PROFILES.sword;
+
+  function weaponProfile(itemOrKey) {
+    var key = typeof itemOrKey === 'string' ? itemOrKey
+      : (itemOrKey && itemOrKey.base) || 'sword';
+    var src = WEAPON_PROFILES[key] || DEFAULT_WEAPON_PROFILE;
+    return {
+      style: src.style,
+      label: src.label,
+      range: src.range,
+      arc: src.arc,
+      maxHits: src.maxHits,
+      knock: src.knock,
+      swingT: src.swingT,
+      dmgMul: src.dmgMul,
+      smashR: src.smashR || 0,
+      bursts: src.bursts || 1,
+      projSpeed: src.projSpeed || 0,
+      projR: src.projR || 0,
+      pierce: src.pierce || 1,
+      key: key
+    };
+  }
+
   /* ------------------------------------------------------------ 基础型号 */
   var BASES = {
     weapon: [
       { key: 'sword', name: '时空短剑', stats: { atk: 12, aspd: 5 } },
       { key: 'axe', name: '营地战斧', stats: { atk: 17, critDmg: 12 } },
       { key: 'dagger', name: '獠牙匕首', stats: { atk: 9, aspd: 12, crit: 3 } },
-      { key: 'maul', name: '碎岩重锤', stats: { atk: 23, aspd: -10, critDmg: 20 } }
+      { key: 'maul', name: '碎岩重锤', stats: { atk: 23, aspd: -10, critDmg: 20 } },
+      { key: 'spear', name: '时空长枪', stats: { atk: 14, move: 3 } },
+      { key: 'bow', name: '风语短弓', stats: { atk: 11, aspd: 8, crit: 4 } },
+      { key: 'staff', name: '秘法杖', stats: { atk: 10, skillDmg: 10, cdr: 4 } },
+      { key: 'flail', name: '星屑链锤', stats: { atk: 15, thorns: 4, critDmg: 8 } }
     ],
     helm: [
       { key: 'hood', name: '皮革头巾', stats: { hp: 26, armor: 5 } },
@@ -396,6 +438,7 @@
     AFFIXES: AFFIXES,
     AFFIX_BY_KEY: AFFIX_BY_KEY,
     BASES: BASES,
+    WEAPON_PROFILES: WEAPON_PROFILES,
     UNIQUES: UNIQUES,
     UNIQUE_BY_KEY: UNIQUE_BY_KEY,
     UPGRADE_CAP: UPGRADE_CAP,
@@ -403,6 +446,7 @@
     fmtValue: fmtValue,
     baselineOf: baselineOf,
     upgradeMult: upgradeMult,
+    weaponProfile: weaponProfile,
     roll: roll,
     itemStats: itemStats,
     power: power,
