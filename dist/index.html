@@ -612,14 +612,20 @@
   .loot-toast { display: flex; align-items: center; gap: 6px; font-size: 11.5px; padding: 4px 9px; border-radius: 8px; background: rgba(10, 8, 20, .8); border-left: 3px solid var(--r-common); animation: lootIn .3s ease; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   @keyframes lootIn { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
   .hud-bottom { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 10px; align-items: flex-end; }
-  /* 装备相关技能（武器技 / 套装主动等）固定右下角，与底部通用技能条分离；后续同类按钮放进此容器 */
+  /* 小地图尺寸须与 src/render.js drawMinimap 的 size/pad 保持一致 */
+  .hud {
+    --minimap-size: 132px;
+    --minimap-pad: 14px;
+    --minimap-gap: 10px;
+  }
+  /* 装备相关技能：右下区域、小地图左侧，避免盖住小地图；后续同类按钮放进此容器 */
   .hud-gear-skills {
     position: absolute;
-    right: calc(14px + env(safe-area-inset-right, 0px));
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    right: calc(var(--minimap-pad) + var(--minimap-size) + var(--minimap-gap) + env(safe-area-inset-right, 0px));
+    bottom: calc(var(--minimap-pad) + env(safe-area-inset-bottom, 0px));
     display: flex; flex-direction: row-reverse; flex-wrap: wrap-reverse;
     gap: 8px; align-items: flex-end; justify-content: flex-start;
-    max-width: min(220px, 42vw); z-index: 21;
+    max-width: min(220px, 36vw); z-index: 21;
   }
   .hud-gear-skills:empty { display: none; }
   .auto-toggle {
@@ -770,15 +776,16 @@
     left: auto; right: calc(6px + env(safe-area-inset-right)); transform: none;
     bottom: calc(10px + env(safe-area-inset-bottom)); gap: 6px;
   }
-  /* 触屏时通用技能条已在右下：装备技能叠在其上方，仍靠右 */
+  /* 触屏：通用技能条在右下；装备技能仍在小地图左侧并抬高，避免叠小地图与技能条 */
   html.is-touch .hud-gear-skills {
-    right: calc(6px + env(safe-area-inset-right));
+    right: calc(var(--minimap-pad) + var(--minimap-size) + var(--minimap-gap) + env(safe-area-inset-right, 0px));
     bottom: calc(78px + env(safe-area-inset-bottom));
-    max-width: min(180px, 48vw);
+    max-width: min(160px, 40vw);
   }
   html.is-touch .auto-toggle {
     left: auto; right: calc(8px + env(safe-area-inset-right)); transform: none;
-    bottom: calc(148px + env(safe-area-inset-bottom)); min-height: 36px; padding: 0 12px;
+    bottom: calc(var(--minimap-pad) + var(--minimap-size) + 12px + env(safe-area-inset-bottom));
+    min-height: 36px; padding: 0 12px;
   }
   html.is-touch .auto-toggle .key { display: none; }
   html.is-touch .slot { width: 52px; height: 56px; }
@@ -789,7 +796,9 @@
     html.is-touch .action-btn { width: 48px; height: 52px; font-size: 10px; }
     html.is-touch .hud-bottom { gap: 4px; }
     html.is-touch .hud-gear-skills { bottom: calc(64px + env(safe-area-inset-bottom)); gap: 4px; }
-    html.is-touch .auto-toggle { bottom: calc(120px + env(safe-area-inset-bottom)); }
+    html.is-touch .auto-toggle {
+      bottom: calc(var(--minimap-pad) + var(--minimap-size) + 8px + env(safe-area-inset-bottom));
+    }
     html.is-touch .slot { width: 40px; height: 46px; }
     html.is-touch .slot .sn { display: none; }
   }
@@ -1362,13 +1371,21 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.10.1';
+  SP.VERSION = '2.10.2';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.10.2',
+      date: '2026-10-09',
+      title: '装备技能避开小地图',
+      items: [
+        '右下角装备技能条移到小地图左侧，不再遮挡小地图'
+      ]
+    },
     {
       version: '2.10.1',
       date: '2026-10-09',
@@ -6598,6 +6615,8 @@
 
   /* -------------------------------------------------------------- 小地图 */
   Renderer.prototype.drawMinimap = function (ctx, world) {
+    /* size/pad 与 index.html .hud 的 --minimap-size / --minimap-pad 同步；
+       装备技能条会按同值避让到小地图左侧 */
     var size = 132, pad = 14;
     var mx = this.w - size - pad, my = this.h - size - pad;
     ctx.save();
@@ -8866,6 +8885,7 @@
     this.slotCd('slotBless', cds.bless);
     this.slotCd('slotDash', cds.dash);
     this.slotCd('slotSteak', cds.steak);
+    /* 装备技能在右下角 #hudGearSkills；未装备时整槽隐藏 */
     var wSlot = this.$('slotWeapon');
     if (wSlot && cds.weapon) {
       wSlot.classList.toggle('hidden', !cds.weapon.ready);

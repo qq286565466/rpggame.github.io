@@ -3,13 +3,21 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.10.1';
+  SP.VERSION = '2.10.2';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.10.2',
+      date: '2026-10-09',
+      title: '装备技能避开小地图',
+      items: [
+        '右下角装备技能条移到小地图左侧，不再遮挡小地图'
+      ]
+    },
     {
       version: '2.10.1',
       date: '2026-10-09',
