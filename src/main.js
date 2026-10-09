@@ -115,6 +115,7 @@
     pulse('slotBless', 'bless');
     pulse('slotDash', 'dash');
     pulse('slotSteak', 'use');
+    pulse('slotWeapon', 'weaponSkill');
   }
 
   function bindInput() {
@@ -187,6 +188,7 @@
         if (k === 'q') input.quake = true;
         if (k === 'e') input.bless = true;
         if (k === '1') input.use = true;
+        if (k === '2') input.weaponSkill = true;
         if (k === ' ' || k === 'shift') input.dash = true;
       }
       if (k === 'r' && ui.screen === 'game') setAutoAtk(!autoAtk);
@@ -375,9 +377,11 @@
       aimSnap: autoLock,
       attack: input.attack || autoLock,
       quake: input.quake, bless: input.bless, use: input.use, dash: input.dash,
+      weaponSkill: input.weaponSkill,
       viewW: renderer ? renderer.w : 0, viewH: renderer ? renderer.h : 0
     };
     input.quake = input.bless = input.use = input.dash = false;
+    input.weaponSkill = false;
     return out;
   }
 
@@ -426,6 +430,7 @@
         case 'hurt': sound.play('hurt'); break;
         case 'quake': sound.play('quake'); break;
         case 'bless': sound.play('bless'); break;
+        case 'domain': sound.play('quake'); break;
         case 'dash': sound.play('spit'); break;
         case 'steak': sound.play('steak'); break;
         case 'pickup':
@@ -484,6 +489,7 @@
     paused = false;
     running = true;
     input.attack = false; input.quake = false; input.bless = false; input.use = false; input.dash = false;
+    input.weaponSkill = false;
     autoLock = false;
     autoAim = false;
   }

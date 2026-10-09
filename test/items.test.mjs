@@ -256,7 +256,9 @@ test('aggregate 汇总装备属性并收集传说效果', () => {
   assert.deepEqual(agg.__uniques, ['vampiric']);
   const empty = I.aggregate(null);
   assert.deepEqual(empty.__uniques, []);
-  assert.equal(Object.keys(empty).length, 1, '空装备应只返回 __uniques');
+  assert.ok(empty.__sets, '空装备也应返回套装进度');
+  assert.deepEqual(empty.__sets.active, []);
+  assert.equal(Object.keys(empty).length, 2, '空装备应只返回 __uniques / __sets');
 });
 
 test('戒指会依次填入 ring1 / ring2 并返回被替换的装备', () => {
@@ -325,9 +327,10 @@ test('allBases / BASE_BY_KEY 覆盖全部装备型号', () => {
   assert.deepEqual(I.GEAR_SLOT_ORDER, I.DROP_SLOTS);
 });
 
-test('武器基础型号覆盖八种，并各自对应攻击档案', () => {
+test('武器基础型号覆盖常规八种 + 联动裁刃，并各自对应攻击档案', () => {
   const keys = I.BASES.weapon.map((b) => b.key);
-  assert.deepEqual(keys.slice().sort(), ['axe', 'bow', 'dagger', 'flail', 'maul', 'spear', 'staff', 'sword']);
+  assert.deepEqual(keys.slice().sort(),
+    ['axe', 'bow', 'dagger', 'flail', 'maul', 'oathblade', 'spear', 'staff', 'sword']);
   for (const key of keys) {
     const wp = I.weaponProfile(key);
     assert.equal(wp.key, key);
@@ -336,6 +339,8 @@ test('武器基础型号覆盖八种，并各自对应攻击档案', () => {
   assert.equal(I.weaponProfile('bow').style, 'shot');
   assert.equal(I.weaponProfile('staff').pierce, 2);
   assert.ok(I.weaponProfile('spear').range > I.weaponProfile('sword').range);
+  assert.equal(I.weaponProfile('oathblade').label, '裁斩');
+  assert.ok(I.BASE_BY_KEY.oathblade.collab, '裁刃应为联动型号');
 });
 
 test('随机武器会落到新型号上，且保留 base 字段', () => {
@@ -403,7 +408,9 @@ test('词条锁定：最多 2 条，重铸跳过已锁数值', () => {
 });
 
 test('传说武器可抽到武器专属独特，防具不会', () => {
-  const weaponOnly = I.UNIQUES.filter((u) => u.slots && u.slots.indexOf('weapon') >= 0).map((u) => u.key);
+  const weaponOnly = I.UNIQUES
+    .filter((u) => u.slots && u.slots.indexOf('weapon') >= 0 && !u.setOnly)
+    .map((u) => u.key);
   assert.ok(weaponOnly.length >= 6, '应至少有 6 个武器专属传说');
   assert.deepEqual(
     I.uniquesForSlot('helm').map((u) => u.key).filter((k) => weaponOnly.indexOf(k) >= 0),
@@ -412,12 +419,14 @@ test('传说武器可抽到武器专属独特，防具不会', () => {
   );
   const wKeys = I.uniquesForSlot('weapon').map((u) => u.key);
   for (const k of weaponOnly) assert.ok(wKeys.indexOf(k) >= 0, '武器池应含 ' + k);
+  assert.ok(wKeys.indexOf('domaincut') < 0, '普通传说池不应含套装专属 domaincut');
 
   const rng = SP.makeRng(21);
   let sawWeaponOnly = false;
   for (let i = 0; i < 80; i++) {
     const key = I.pickUnique(rng, 'weapon');
     if (weaponOnly.indexOf(key) >= 0) sawWeaponOnly = true;
+    assert.notEqual(key, 'domaincut', 'pickUnique 不应抽到套装专属');
   }
   assert.ok(sawWeaponOnly, '武器传说抽样应出现武器专属效果');
 
@@ -425,6 +434,52 @@ test('传说武器可抽到武器专属独特，防具不会', () => {
     const key = I.pickUnique(rng, 'armor');
     assert.ok(weaponOnly.indexOf(key) < 0, '防具传说不应抽到武器专属: ' + key);
   }
+});
+
+test('联动套装不进普通掉落，makeSetPiece 产出传说部件', () => {
+  assert.ok(I.GEAR_SETS.oath, '应定义缚誓远征套装');
+  const rng = SP.makeRng(99);
+  for (let i = 0; i < 400; i++) {
+    const it = I.roll(rng, { ilvl: 25, rarityBias: 2 });
+    assert.ok(!I.BASE_BY_KEY[it.base].collab, '普通 roll 不应出联动型号: ' + it.base);
+  }
+  const blade = I.makeSetPiece(rng, 'oath', { ilvl: 22, baseKey: 'oathblade' });
+  assert.ok(blade);
+  assert.equal(blade.base, 'oathblade');
+  assert.equal(blade.set, 'oath');
+  assert.equal(blade.rarity, 'legendary');
+  assert.equal(blade.unique, 'domaincut');
+  assert.equal(I.weaponProfile(blade).label, '裁斩');
+
+  const pieces = {};
+  for (let i = 0; i < 60; i++) {
+    const it = I.makeSetPiece(rng, 'oath', { ilvl: 20 });
+    pieces[it.base] = (pieces[it.base] || 0) + 1;
+  }
+  assert.ok(Object.keys(pieces).length >= 4, '随机匣应覆盖多件套装部件');
+});
+
+test('套装进度与 aggregate 并入 2/4/6 件加成', () => {
+  const rng = SP.makeRng(7);
+  const eq = { weapon: null, helm: null, armor: null, boots: null, amulet: null, ring1: null, ring2: null };
+  const keys = ['oathblade', 'oathhelm', 'oathplate', 'oathboots', 'oathamulet', 'oathring'];
+  const slots = ['weapon', 'helm', 'armor', 'boots', 'amulet', 'ring1'];
+  for (let i = 0; i < keys.length; i++) {
+    eq[slots[i]] = I.makeSetPiece(rng, 'oath', { ilvl: 18, baseKey: keys[i] });
+  }
+  let prog = I.setProgress({ weapon: eq.weapon, helm: eq.helm });
+  assert.equal(prog.counts.oath, 2);
+  assert.ok(prog.active[0].flags.markDouble === undefined || !prog.active[0].flags.markDouble);
+  assert.equal(prog.active[0].stats.skillDmg, 12);
+
+  prog = I.setProgress(eq);
+  assert.equal(prog.counts.oath, 6);
+  assert.equal(prog.active[0].flags.markDouble, true);
+  assert.equal(prog.active[0].flags.domainStun, 0.55);
+  const agg = I.aggregate(eq);
+  assert.ok(agg.skillDmg >= 12, '2 件技能伤害应并入 aggregate');
+  assert.ok(agg.__uniques.indexOf('domaincut') >= 0);
+  assert.equal(agg.__sets.active[0].count, 6);
 });
 
 console.log('\n时空猪 · 装备系统测试\n' + out.join('\n'));

@@ -709,6 +709,17 @@
         '<h4 class="stat-group">传说</h4><div class="sl"><span style="color:var(--r-legendary)">' +
         esc(names.join('、')) + '</span></div>'));
     }
+    if (st.sets && st.sets.active && st.sets.active.length) {
+      st.sets.active.forEach(function (row) {
+        var html = '<h4 class="stat-group" style="color:' + (row.color || '#c07bff') + '">' +
+          esc(row.name) + ' · ' + row.count + '/' + row.total + '</h4>';
+        (row.lines || []).forEach(function (ln) {
+          html += '<div class="sl"><span class="' + (ln.on ? '' : 'muted') + '" style="' +
+            (ln.on ? 'color:#e0c0ff' : '') + '">(' + ln.need + ') ' + esc(ln.desc) + '</span></div>';
+        });
+        wrap.appendChild(el('section', 'stat-unique', html));
+      });
+    }
   };
 
   UI.prototype.slotGlyph = function (slot) { return SP.Renderer.prototype.slotGlyph(slot); };
@@ -1099,6 +1110,19 @@
       html += '<div class="tt-sec"><div class="tt-unique">◆ ' + u.name + '</div>' +
         '<div class="tiny muted">' + u.desc + '</div></div>';
     }
+    var setKey = item.set || (I.BASE_BY_KEY[item.base] && I.BASE_BY_KEY[item.base].set);
+    if (setKey && I.GEAR_SETS[setKey]) {
+      var setDef = I.GEAR_SETS[setKey];
+      var worn = I.setProgress(ch && ch.equipped).counts[setKey] || 0;
+      html += '<div class="tt-sec"><div class="tt-unique" style="color:' + setDef.color + '">◇ ' +
+        esc(setDef.name) + ' · ' + worn + '/' + setDef.pieces.length + '</div>';
+      setDef.bonuses.forEach(function (b) {
+        var on = worn >= b.need;
+        html += '<div class="tiny ' + (on ? '' : 'muted') + '" style="' +
+          (on ? 'color:#e0c0ff' : '') + '">(' + b.need + ') ' + esc(b.desc) + '</div>';
+      });
+      html += '</div>';
+    }
     // 与当前装备的差值
     if (!isEquipped && target) {
       var diff = I.compare(target, item);
@@ -1488,6 +1512,22 @@
         if (!r.ok) return self.flash(r.reason);
         var rar = I.RARITY_BY_KEY[r.item.rarity];
         self.afterChange('神秘商人给了你 <span style="color:' + rar.color + '">' + esc(r.item.name) + '</span>（ilvl ' + r.item.ilvl + '）');
+      });
+    shopRow('缚誓匣 · 随机套装件', '「缚誓远征」传说部件；凑齐 2/4/6 件激活套装', P.OATH_COST + ' 秘宝',
+      ch.stones >= P.OATH_COST && ch.inventory.length < P.INVENTORY_CAP, function () {
+        var ilvl = Math.max(16, highestMlvl(ch));
+        var r = P.buyOathPiece(ch, ilvl, false);
+        if (!r.ok) return self.flash(r.reason);
+        var rar = I.RARITY_BY_KEY[r.item.rarity];
+        self.afterChange('打开缚誓匣：<span style="color:' + rar.color + '">' + esc(r.item.name) + '</span>');
+      });
+    shopRow('缚誓匣 · 裁刃保底', '必定获得套装武器「缚誓裁刃」与武器技「开·小领域」', P.OATH_WEAPON_COST + ' 秘宝',
+      ch.stones >= P.OATH_WEAPON_COST && ch.inventory.length < P.INVENTORY_CAP, function () {
+        var ilvl = Math.max(16, highestMlvl(ch));
+        var r = P.buyOathPiece(ch, ilvl, true);
+        if (!r.ok) return self.flash(r.reason);
+        var rar = I.RARITY_BY_KEY[r.item.rarity];
+        self.afterChange('缚誓裁刃入手：<span style="color:' + rar.color + '">' + esc(r.item.name) + '</span>');
       });
     shopRow('强化石 × 5', '铁匠强化装备所需', '3 秘宝', ch.stones >= 3, function () {
       if (ch.stones < 3) return self.flash('alpha-stone 不足');
@@ -2003,6 +2043,15 @@
     this.slotCd('slotBless', cds.bless);
     this.slotCd('slotDash', cds.dash);
     this.slotCd('slotSteak', cds.steak);
+    var wSlot = this.$('slotWeapon');
+    if (wSlot && cds.weapon) {
+      wSlot.classList.toggle('hidden', !cds.weapon.ready);
+      if (cds.weapon.ready) {
+        this.slotCd('slotWeapon', cds.weapon);
+        var mk = this.$('weaponMarkCnt');
+        if (mk) mk.textContent = String(cds.weapon.marks || 0);
+      }
+    }
 
     var comboEl = $('hudCombo');
     if (world.combo >= 5 && world.comboT > 0) {
