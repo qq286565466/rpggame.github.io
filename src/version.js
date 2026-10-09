@@ -3,13 +3,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.11.3';
+  SP.VERSION = '2.11.4';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.11.4',
+      date: '2026-10-09',
+      title: 'SakuraFrp / 穿透远程联机',
+      items: [
+        '部署支持 PUBLIC_URL / --public=穿透访问地址，服主面板显示发给好友的页面与联机地址',
+        '联机地址自动规范化（http→ws、https→wss、补全 /ws）；支持 ?ws= 一键加入链接',
+        '新增 server/FRP.md：SakuraFrp 用 TCP 隧道、本地 127.0.0.1:4321 的开服说明'
+      ]
+    },
     {
       version: '2.11.3',
       date: '2026-10-09',

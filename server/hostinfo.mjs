@@ -78,8 +78,45 @@ export async function detectPublicIp() {
 }
 
 /**
+ * 把穿透/公网入口规范成 http(s) 页面基址。
+ * 支持：域名、host:port、http(s)://、ws(s)://、带/ws 路径
+ */
+export function normalizePublicBase(raw) {
+  let u = String(raw || '').trim();
+  if (!u) return null;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) u = 'http://' + u;
+  u = u.replace(/^ws:/i, 'http:').replace(/^wss:/i, 'https:');
+  try {
+    const parsed = new URL(u);
+    // 去掉 /ws 路径，只保留站点根
+    if (/\/ws\/?$/i.test(parsed.pathname)) parsed.pathname = '/';
+    else if (parsed.pathname === '/ws') parsed.pathname = '/';
+    let path = parsed.pathname || '/';
+    if (path !== '/' && path.endsWith('/')) path = path.slice(0, -1);
+    const basePath = path === '/' ? '' : path;
+    const portPart = parsed.port ? (':' + parsed.port) : '';
+    return parsed.protocol + '//' + parsed.hostname + portPart + basePath;
+  } catch {
+    return null;
+  }
+}
+
+/** 由公网/穿透基址生成页面与联机地址 */
+export function urlsFromPublicBase(base) {
+  const b = normalizePublicBase(base);
+  if (!b) return null;
+  const wsBase = b.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
+  return {
+    base: b,
+    http: b,
+    ws: wsBase.replace(/\/?$/, '') + '/ws',
+    join: b.replace(/\/?$/, '') + '/?ws=' + encodeURIComponent(wsBase.replace(/\/?$/, '') + '/ws')
+  };
+}
+
+/**
  * 汇总服主部署信息。
- * @param {{ port?: number, host?: string }} opts
+ * @param {{ port?: number, host?: string, publicUrl?: string }} opts
  */
 export async function gatherHostInfo(opts = {}) {
   const port = Number(opts.port || process.env.PORT || 4321);
@@ -87,6 +124,12 @@ export async function gatherHostInfo(opts = {}) {
   const lan = listLanIps();
   const publicIp = await detectPublicIp();
   const primaryLan = (lan.find((x) => x.private) || lan[0] || null);
+  const publicRaw = opts.publicUrl
+    || process.env.PUBLIC_URL
+    || process.env.FRP_URL
+    || process.env.SP_PUBLIC_URL
+    || '';
+  const frp = urlsFromPublicBase(publicRaw);
 
   return {
     port,
@@ -97,20 +140,26 @@ export async function gatherHostInfo(opts = {}) {
     lan,
     primaryLan: primaryLan ? primaryLan.address : null,
     publicIp,
+    publicUrl: frp ? frp.base : null,
+    frp: frp || null,
     urls: {
       localHttp: `http://127.0.0.1:${port}`,
       localWs: `ws://127.0.0.1:${port}/ws`,
       lanHttp: primaryLan ? `http://${primaryLan.address}:${port}` : null,
       lanWs: primaryLan ? `ws://${primaryLan.address}:${port}/ws` : null,
-      publicHttp: publicIp ? `http://${publicIp}:${port}` : null,
-      publicWs: publicIp ? `ws://${publicIp}:${port}/ws` : null
+      publicHttp: frp ? frp.http : (publicIp ? `http://${publicIp}:${port}` : null),
+      publicWs: frp ? frp.ws : (publicIp ? `ws://${publicIp}:${port}/ws` : null),
+      join: frp ? frp.join : (publicIp
+        ? `http://${publicIp}:${port}/?ws=${encodeURIComponent('ws://' + publicIp + ':' + port + '/ws')}`
+        : null)
     },
     portMap: {
       externalPort: port,
-      internalIp: primaryLan ? primaryLan.address : '本机局域网IP',
+      internalIp: '127.0.0.1',
       internalPort: port,
+      lanIp: primaryLan ? primaryLan.address : null,
       protocol: 'TCP',
-      note: 'HTTP 与 WebSocket 共用同一端口，只需映射一次 TCP'
+      note: 'HTTP 与 WebSocket 共用同一端口。SakuraFrp / frp 请用 TCP 隧道，本地填 127.0.0.1:' + port
     }
   };
 }
@@ -123,55 +172,53 @@ export function formatHostBanner(info) {
   lines.push(' 时空猪 · 服主自动部署');
   lines.push(bar);
   lines.push('');
-  lines.push('【必须映射的端口】');
+  lines.push('【本地监听 / 穿透本地端】');
   lines.push(`  协议     : ${info.portMap.protocol}`);
-  lines.push(`  外部端口 : ${info.portMap.externalPort}`);
-  lines.push(`  内部 IP  : ${info.portMap.internalIp}`);
-  lines.push(`  内部端口 : ${info.portMap.internalPort}`);
+  lines.push(`  本地地址 : ${info.portMap.internalIp}:${info.portMap.internalPort}`);
   lines.push(`  说明     : ${info.portMap.note}`);
   lines.push('');
-  lines.push('【路由器 / 光猫端口转发示例】');
-  lines.push(`  外网端口 ${info.port}  →  ${info.portMap.internalIp}:${info.port}  (TCP)`);
-  lines.push('  云主机安全组 / 防火墙请放行同一 TCP 端口入站。');
+  lines.push('【SakuraFrp / frp 内网穿透】');
+  lines.push('  1. 隧道类型选「TCP」（不要只开纯 HTTP 若不支持升级）');
+  lines.push(`  2. 本地地址填 127.0.0.1:${info.port}（与本服务一致）`);
+  lines.push('  3. 启动穿透后，把「访问地址」设为 PUBLIC_URL 再部署，例如：');
+  lines.push('       set PUBLIC_URL=http://xxx.sakurafrp.com:12345');
+  lines.push('       npm run deploy');
+  lines.push('     或：node server/deploy.mjs --public=http://xxx.sakurafrp.com:12345');
+  if (info.frp) {
+    lines.push('');
+    lines.push('【已配置的穿透地址 → 请把下面发给外网好友】');
+    lines.push(`  页面      ${info.urls.publicHttp}`);
+    lines.push(`  联机填入  ${info.urls.publicWs}`);
+    lines.push(`  一键链接  ${info.urls.join}`);
+    lines.push('  ※ 好友必须打开「穿透后的页面地址」，不要用 127.0.0.1');
+    lines.push('  ※ 若穿透是 https 域名，联机地址会是 wss://…/ws');
+  } else {
+    lines.push('');
+    lines.push('  ※ 当前未设置 PUBLIC_URL。只用局域网或路由器端口映射时可不填。');
+    lines.push('  ※ 用 SakuraFrp 却不设 PUBLIC_URL 时，好友容易连到错误地址。');
+  }
+  lines.push('');
+  lines.push('【路由器端口转发（有公网 IP 时）】');
+  lines.push(`  外网端口 ${info.port}  →  ${(info.portMap.lanIp || '局域网IP')}:${info.port}  (TCP)`);
   lines.push('');
   lines.push('【本机地址】（服主自己玩）');
   lines.push(`  页面  ${info.urls.localHttp}`);
   lines.push(`  联机  ${info.urls.localWs}`);
   if (info.urls.lanHttp) {
     lines.push('');
-    lines.push('【局域网地址】（同一 Wi‑Fi / 内网好友）');
+    lines.push('【局域网地址】（同一 Wi‑Fi）');
     lines.push(`  页面  ${info.urls.lanHttp}`);
     lines.push(`  联机  ${info.urls.lanWs}`);
   }
-  if (info.publicIp) {
+  if (!info.frp && info.publicIp) {
     lines.push('');
-    lines.push('【公网地址】（完成端口映射后给外网好友）');
-    lines.push(`  探测到的公网 IP : ${info.publicIp}`);
+    lines.push('【探测到的公网 IP】（需自行做端口映射才可用）');
+    lines.push(`  ${info.publicIp}`);
     lines.push(`  页面  ${info.urls.publicHttp}`);
     lines.push(`  联机  ${info.urls.publicWs}`);
-    lines.push('  ※ 若家宽无公网 IP（运营商 NAT），需内网穿透或云主机。');
-  } else {
-    lines.push('');
-    lines.push('【公网 IP】未能自动探测，请在路由器WAN口查看，或访问 https://ip.sb');
-  }
-  if (info.lan.length) {
-    lines.push('');
-    lines.push('【本机网卡】');
-    for (const n of info.lan) {
-      lines.push(`  ${n.iface.padEnd(12)} ${n.address}${n.private ? '  (局域网)' : ''}`);
-    }
   }
   lines.push('');
-  lines.push('【发给好友的话术】');
-  if (info.urls.lanWs) {
-    lines.push(`  局域网：打开 ${info.urls.lanHttp} ，联机填 ${info.urls.lanWs}`);
-  }
-  if (info.urls.publicWs) {
-    lines.push(`  外网：先确保已映射 TCP ${info.port}，再打开 ${info.urls.publicHttp}`);
-    lines.push(`        联机填 ${info.urls.publicWs}`);
-  }
-  lines.push('');
-  lines.push('服主面板（启动后）：' + info.urls.localHttp + '/host');
+  lines.push('服主面板：' + info.urls.localHttp + '/host');
   lines.push(bar);
   return lines.join('\n');
 }
@@ -183,17 +230,18 @@ export function formatHostCard(info) {
     `生成时间: ${new Date().toISOString()}`,
     `主机名: ${info.hostname}`,
     '',
-    `映射端口: TCP ${info.port}`,
-    `内网目标: ${info.portMap.internalIp}:${info.port}`,
+    `本地服务: 127.0.0.1:${info.port} (TCP)`,
+    info.frp ? `穿透入口: ${info.publicUrl}` : '',
     '',
     `本机页面: ${info.urls.localHttp}`,
     `本机联机: ${info.urls.localWs}`,
     info.urls.lanHttp ? `局域网页面: ${info.urls.lanHttp}` : '',
     info.urls.lanWs ? `局域网联机: ${info.urls.lanWs}` : '',
-    info.urls.publicHttp ? `公网页面: ${info.urls.publicHttp}` : '',
-    info.urls.publicWs ? `公网联机: ${info.urls.publicWs}` : '',
-    info.publicIp ? `公网IP: ${info.publicIp}` : '公网IP: (未探测到)',
+    info.urls.publicHttp ? `外网页面: ${info.urls.publicHttp}` : '',
+    info.urls.publicWs ? `外网联机: ${info.urls.publicWs}` : '',
+    info.urls.join ? `一键加入: ${info.urls.join}` : '',
     '',
-    '提醒：路由器做端口转发，云主机放行安全组；HTTP 与 WS 共用该 TCP 端口。'
+    'SakuraFrp：隧道类型 TCP，本地 127.0.0.1:' + info.port + '，部署时设置 PUBLIC_URL=访问地址',
+    '好友请打开外网页面地址，联机栏填外网联机地址（或点一键加入链接）。'
   ].filter(Boolean).join('\n') + '\n';
 }

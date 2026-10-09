@@ -1027,11 +1027,12 @@
           <button class="ghost tiny-btn" data-close="panelOnline">关闭 (Esc)</button>
         </div>
         <p class="tiny muted" style="margin:0 0 10px">
-          服主请运行 <code>npm run deploy</code>（自动提示需映射的端口/IP，并打开服主面板 <code>/host</code>）。
-          仅本机调试可用 <code>npm run online</code>。接入后大厅可见其他旅人；可组队或单刷。
+          服主：<code>npm run deploy</code>；用 SakuraFrp 时加
+          <code>--public=http://访问地址</code>，把穿透页面/一键链接发给好友。
+          好友联机栏填 <code>ws://访问地址/ws</code>（https 穿透用 wss）。
         </p>
         <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
-          <input id="onlineUrl" type="text" placeholder="ws://127.0.0.1:4321/ws" style="flex:1;min-width:180px">
+          <input id="onlineUrl" type="text" placeholder="ws://主机:端口/ws 或穿透地址" style="flex:1;min-width:180px">
           <button id="btnOnlineConnect" class="primary tiny-btn">接入大厅</button>
           <button id="btnOnlineDisconnect" class="ghost tiny-btn">断开</button>
         </div>
@@ -1401,13 +1402,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.11.3';
+  SP.VERSION = '2.11.4';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.11.4',
+      date: '2026-10-09',
+      title: 'SakuraFrp / 穿透远程联机',
+      items: [
+        '部署支持 PUBLIC_URL / --public=穿透访问地址，服主面板显示发给好友的页面与联机地址',
+        '联机地址自动规范化（http→ws、https→wss、补全 /ws）；支持 ?ws= 一键加入链接',
+        '新增 server/FRP.md：SakuraFrp 用 TCP 隧道、本地 127.0.0.1:4321 的开服说明'
+      ]
+    },
     {
       version: '2.11.3',
       date: '2026-10-09',
@@ -5338,9 +5349,27 @@
     return proto + '//' + location.host + '/ws';
   }
 
+  /**
+   * 规范化联机地址（SakuraFrp / 穿透常用）。
+   * - http→ws、https→wss
+   * - 自动补 /ws
+   * - 支持只填 host:port
+   */
+  function normalizeWsUrl(raw) {
+    var u = String(raw == null ? '' : raw).trim();
+    if (!u) return defaultWsUrl();
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) u = 'ws://' + u;
+    u = u.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
+    // 去掉哈希与多余斜杠
+    u = u.split('#')[0].split('?')[0];
+    u = u.replace(/\/+$/, '');
+    if (!/\/ws$/i.test(u)) u += '/ws';
+    return u;
+  }
+
   function OnlineClient(opts) {
     opts = opts || {};
-    this.url = opts.url || defaultWsUrl();
+    this.url = normalizeWsUrl(opts.url || defaultWsUrl());
     this.ws = null;
     this.id = null;
     this.connected = false;
@@ -5610,6 +5639,7 @@
   };
 
   OnlineClient.defaultWsUrl = defaultWsUrl;
+  OnlineClient.normalizeWsUrl = normalizeWsUrl;
   OnlineClient.packCharacter = function (ch) {
     ch = ch || {};
     return {
@@ -7984,9 +8014,26 @@
     });
     $('#btnOnline').addEventListener('click', function () { self.togglePanel('online'); });
     var urlInp = doc.getElementById('onlineUrl');
-    if (urlInp && SP.OnlineClient) urlInp.value = SP.OnlineClient.defaultWsUrl();
+    if (urlInp && SP.OnlineClient) {
+      var fromQuery = '';
+      try {
+        var qs = new URLSearchParams(global.location && global.location.search || '');
+        fromQuery = qs.get('ws') || qs.get('online') || '';
+      } catch (e) { fromQuery = ''; }
+      urlInp.value = fromQuery
+        ? SP.OnlineClient.normalizeWsUrl(fromQuery)
+        : SP.OnlineClient.defaultWsUrl();
+      urlInp.placeholder = 'ws://主机:端口/ws 或穿透地址';
+      // 带 ?ws= 的一键加入链接：进入后提示可直接接入
+      if (fromQuery) {
+        self._pendingOnlineUrl = urlInp.value;
+      }
+    }
     $('#btnOnlineConnect').addEventListener('click', function () {
-      if (self.hooks.onOnlineConnect) self.hooks.onOnlineConnect(self.$('onlineUrl').value);
+      var raw = self.$('onlineUrl').value;
+      var norm = SP.OnlineClient ? SP.OnlineClient.normalizeWsUrl(raw) : raw;
+      if (self.$('onlineUrl')) self.$('onlineUrl').value = norm;
+      if (self.hooks.onOnlineConnect) self.hooks.onOnlineConnect(norm);
     });
     $('#btnOnlineDisconnect').addEventListener('click', function () {
       if (self.hooks.onOnlineDisconnect) self.hooks.onOnlineDisconnect();
@@ -8265,6 +8312,17 @@
   UI.prototype.enterHideout = function () {
     if (!this.hideout) this.hideout = new SP.Hideout();
     this.showScreen('hideout');
+    // 一键加入链接 ?ws=… ：进入藏身处后打开联机面板并填好地址
+    if (this._pendingOnlineUrl) {
+      var joinUrl = this._pendingOnlineUrl;
+      this._pendingOnlineUrl = null;
+      var self = this;
+      global.setTimeout(function () {
+        if (self.$('onlineUrl')) self.$('onlineUrl').value = joinUrl;
+        self.openPanel('online');
+        self.flash('已填入服主联机地址，点「接入大厅」即可', true);
+      }, 180);
+    }
   };
   /** 兼容旧调用名 */
   UI.prototype.enterHub = function () { this.enterHideout(); };
@@ -10570,7 +10628,11 @@
       ui.flash('请先登录');
       return;
     }
-    var wsUrl = (url && String(url).trim()) || SP.OnlineClient.defaultWsUrl();
+    var wsUrl = SP.OnlineClient.normalizeWsUrl(
+      (url && String(url).trim()) || SP.OnlineClient.defaultWsUrl()
+    );
+    var urlInp = doc.getElementById('onlineUrl');
+    if (urlInp) urlInp.value = wsUrl;
     if (online && online.url === wsUrl && online.connected) {
       ui.flash('已在联机大厅', true);
       return;

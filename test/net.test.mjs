@@ -72,6 +72,25 @@ await test('OnlineClient.packCharacter 压缩角色字段', () => {
   assert.equal(packed.inventory, undefined);
 });
 
+await test('normalizeWsUrl 规范化穿透地址', () => {
+  assert.equal(
+    SP.OnlineClient.normalizeWsUrl('http://abc.sakurafrp.com:23456'),
+    'ws://abc.sakurafrp.com:23456/ws'
+  );
+  assert.equal(
+    SP.OnlineClient.normalizeWsUrl('https://play.example.com'),
+    'wss://play.example.com/ws'
+  );
+  assert.equal(
+    SP.OnlineClient.normalizeWsUrl('abc.sakurafrp.com:23456'),
+    'ws://abc.sakurafrp.com:23456/ws'
+  );
+  assert.equal(
+    SP.OnlineClient.normalizeWsUrl('ws://h:1/ws'),
+    'ws://h:1/ws'
+  );
+});
+
 await test('Hideout 远程玩家同步与插值', () => {
   const h = new SP.Hideout();
   h.syncRemotes([
