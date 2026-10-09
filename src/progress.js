@@ -292,13 +292,34 @@
   /** 部位对应的实际装备槽（戒指是一对二） */
   function slotGroup(slot) { return slot === 'ring' ? ['ring1', 'ring2'] : [slot]; }
 
+  /**
+   * 角色当前可推进的最高怪物等级（各已解锁群系「下一层」的 mlvl 取最大）。
+   * 用于一键换装 / 战力排序按目标层加权。
+   */
+  function targetMlvl(ch) {
+    var best = 1;
+    if (!ch || !SP.BIOMES) return best;
+    unlockedBiomes(ch).forEach(function (b) {
+      var biome = SP.BIOMES[b];
+      if (!biome) return;
+      var mlvl = biome.mlvlBase + (maxFloor(ch, b) - 1);
+      if (mlvl > best) best = mlvl;
+    });
+    return best;
+  }
+
+  function scoreItem(it, mlvl) {
+    return I.power(it, mlvl);
+  }
+
   /** 读取某类部位当前装备：戒指取两槽中战力较高的那件（用于界面展示与比较） */
-  function currentInSlot(ch, slot) {
+  function currentInSlot(ch, slot, mlvl) {
     var group = slotGroup(slot), best = null;
+    var target = mlvl === undefined ? targetMlvl(ch) : mlvl;
     for (var i = 0; i < group.length; i++) {
       var it = ch.equipped[group[i]];
       if (!it) continue;
-      if (!best || I.power(it) > I.power(best)) best = it;
+      if (!best || scoreItem(it, target) > scoreItem(best, target)) best = it;
     }
     return best;
   }
@@ -307,14 +328,17 @@
    * 一键换装：把背包里该部位最强的一件穿上。
    * 目标槽位优先取空槽，否则替换战力最低的槽（戒指两槽独立判定），
    * 被替换下来的装备一定回到背包，不会凭空消失。
+   * opts.targetMlvl 可覆盖默认的「下一推进层」评分基准。
    */
-  function autoEquipBest(ch, slot) {
+  function autoEquipBest(ch, slot, opts) {
+    opts = opts || {};
+    var mlvl = opts.targetMlvl !== undefined ? opts.targetMlvl : targetMlvl(ch);
     var group = slotGroup(slot);
     var best = null, bestIdx = -1;
     for (var i = 0; i < ch.inventory.length; i++) {
       var it = ch.inventory[i];
       if (it.slot !== slot) continue;
-      if (!best || I.power(it) > I.power(best)) { best = it; bestIdx = i; }
+      if (!best || scoreItem(it, mlvl) > scoreItem(best, mlvl)) { best = it; bestIdx = i; }
     }
     if (!best) return { ok: false, reason: '背包里没有该部位的装备' };
 
@@ -326,10 +350,10 @@
       var weakestSlot = null, weakestPower = Infinity;
       for (g = 0; g < group.length; g++) {
         var cur = ch.equipped[group[g]];
-        var pw = I.power(cur);
+        var pw = scoreItem(cur, mlvl);
         if (pw < weakestPower) { weakestPower = pw; weakestSlot = group[g]; }
       }
-      if (I.power(best) <= weakestPower) return { ok: false, reason: '当前装备已经更好' };
+      if (scoreItem(best, mlvl) <= weakestPower) return { ok: false, reason: '当前装备已经更好' };
       target = weakestSlot;
     }
 
@@ -337,7 +361,7 @@
     var prev = ch.equipped[target] || null;
     ch.equipped[target] = best;
     if (prev && prev.uid !== best.uid) ch.inventory.push(prev);
-    return { ok: true, item: best, replaced: prev, slot: target };
+    return { ok: true, item: best, replaced: prev, slot: target, targetMlvl: mlvl };
   }
 
   /* --------------------------------------------------- 强化 / 重铸 / 分解 / 出售 */
@@ -360,15 +384,25 @@
     if (!found) return { ok: false, reason: '找不到该装备' };
     var item = found.item;
     if (!item.affixes.length) return { ok: false, reason: '这件装备没有词条可重铸' };
+    var unlocked = item.affixes.filter(function (a) { return !a.locked; });
+    if (!unlocked.length) return { ok: false, reason: '所有词条都已锁定，无需重铸' };
     var cost = I.rerollCost(item);
     if (ch.coins < cost.coins) return { ok: false, reason: 'pig-coin 不足（需要 ' + cost.coins + '）' };
     if (ch.materials.re < cost.rerolls) return { ok: false, reason: '重铸石不足（需要 ' + cost.rerolls + '）' };
-    var before = I.power(item);
+    var mlvl = targetMlvl(ch);
+    var before = I.power(item, mlvl);
     ch.coins -= cost.coins;
     ch.materials.re -= cost.rerolls;
     I.reroll(SP.makeRng((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0), item);
-    var after = I.power(item);
+    var after = I.power(item, mlvl);
     return { ok: true, item: item, before: before, after: after, cost: cost };
+  }
+
+  /** 锁定 / 解锁装备上的一条词条（重铸时跳过已锁词条） */
+  function toggleAffixLock(ch, uid, index) {
+    var found = findItem(ch, uid);
+    if (!found) return { ok: false, reason: '找不到该装备' };
+    return I.toggleAffixLock(found.item, index);
   }
 
   /** 分解为材料；已装备的需先卸下；上锁装备不可分解。强化投入按比例返还。 */
@@ -413,15 +447,23 @@
 
   /**
    * 批量分解所有「未装备且战力低于阈值」的装备（背包清理）。
-   * 默认跳过上锁装备；opts.protected 可再给一条额外的保护规则（例如传说/史诗/更优装备）。
+   * 默认跳过上锁装备；第三参可以是保护函数，或 { targetMlvl, protected } 选项对象。
    */
-  function salvageBelow(ch, keepPower, protectedFn) {
+  function salvageBelow(ch, keepPower, optsOrFn) {
+    var opts = {};
+    var protectedFn = null;
+    if (typeof optsOrFn === 'function') protectedFn = optsOrFn;
+    else if (optsOrFn && typeof optsOrFn === 'object') {
+      opts = optsOrFn;
+      protectedFn = opts.protected || null;
+    }
+    var mlvl = opts.targetMlvl !== undefined ? opts.targetMlvl : targetMlvl(ch);
     var removed = 0, stones = 0, rerolls = 0, coins = 0, skippedLocked = 0, skipped = 0;
     for (var i = ch.inventory.length - 1; i >= 0; i--) {
       var it = ch.inventory[i];
       if (it.locked) { skippedLocked++; continue; }
       if (protectedFn && protectedFn(it)) { skipped++; continue; }
-      if (I.power(it) > keepPower) continue;
+      if (scoreItem(it, mlvl) > keepPower) continue;
       var y = I.salvageYield(it);
       stones += y.stones; rerolls += y.rerolls; coins += y.coins || 0;
       ch.inventory.splice(i, 1);
@@ -503,14 +545,18 @@
     return { ok: true, cost: cost, steaks: ch.steaks };
   }
 
-  /** 用秘宝向神秘商人换一件随机稀有以上装备 */
+  /** 用秘宝向神秘商人换一件随机高品质装备（保底精良） */
   var MYSTERY_COST = 6;
   function buyMysteryItem(ch, ilvl, slot) {
     if (ch.stones < MYSTERY_COST) return { ok: false, reason: 'alpha-stone 不足（需要 ' + MYSTERY_COST + '）' };
     if (ch.inventory.length >= INVENTORY_CAP) return { ok: false, reason: '背包已满' };
     ch.stones -= MYSTERY_COST;
-    var item = I.roll(SP.makeRng((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0),
-      { ilvl: ilvl, slot: slot, rarityBias: 2.2, luck: 0.4 });
+    var rng = SP.makeRng((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0);
+    var item = null;
+    for (var tries = 0; tries < 12; tries++) {
+      item = I.roll(rng, { ilvl: ilvl, slot: slot, rarityBias: 2.2 + tries * 0.4, luck: 0.4 });
+      if (I.RARITY_BY_KEY[item.rarity].index >= 1) break;
+    }
     ch.inventory.push(item);
     discoverGear(ch, item);
     return { ok: true, item: item, cost: MYSTERY_COST };
@@ -626,6 +672,16 @@
   function normalizeItemFlags(it) {
     if (!it) return;
     it.locked = !!it.locked;
+    if (!Array.isArray(it.affixes)) return;
+    var locks = 0;
+    it.affixes.forEach(function (af) {
+      if (!af || typeof af !== 'object') return;
+      af.locked = !!af.locked;
+      if (af.locked) {
+        locks++;
+        if (locks > I.MAX_AFFIX_LOCKS) af.locked = false;
+      }
+    });
   }
 
   function validItem(it) {
@@ -650,9 +706,12 @@
     unequip: unequip,
     autoEquipBest: autoEquipBest,
     currentInSlot: currentInSlot,
+    targetMlvl: targetMlvl,
+    scoreItem: scoreItem,
     slotGroup: slotGroup,
     upgradeItem: upgradeItem,
     rerollItem: rerollItem,
+    toggleAffixLock: toggleAffixLock,
     salvage: salvage,
     sell: sell,
     toggleLock: toggleLock,

@@ -128,7 +128,57 @@
 
     logout: function () { this.forget(); this.current = null; },
     char: function () { return this.current ? this.current.character : null; },
-    persist: function () { if (this.current && !this.current.guest) this.save(); }
+    persist: function () { if (this.current && !this.current.guest) this.save(); },
+
+    /** 导出全部本地账号存档为 JSON 文本（含密码散列，勿公开分享） */
+    exportBackup: function () {
+      return JSON.stringify({
+        v: 2,
+        game: 'space-time-pig',
+        exportedAt: Date.now(),
+        users: this.users
+      }, null, 2);
+    },
+
+    /**
+     * 导入备份：按用户名合并；同名账号会被覆盖。
+     * 返回 { ok, msg, imported }
+     */
+    importBackup: function (raw) {
+      var parsed;
+      try { parsed = typeof raw === 'string' ? JSON.parse(raw) : raw; }
+      catch (e) { return { ok: false, msg: '存档不是合法 JSON' }; }
+      if (!parsed || typeof parsed !== 'object' || !parsed.users || typeof parsed.users !== 'object') {
+        return { ok: false, msg: '存档格式无效（缺少 users）' };
+      }
+      var keys = Object.keys(parsed.users);
+      if (!keys.length) return { ok: false, msg: '存档里没有账号' };
+      var imported = 0;
+      for (var i = 0; i < keys.length; i++) {
+        var k = String(keys[i]).toLowerCase();
+        var src = parsed.users[keys[i]];
+        if (!src || typeof src !== 'object') continue;
+        var rec = {
+          name: src.name || k,
+          hash: src.hash || '',
+          created: src.created || Date.now(),
+          guest: false,
+          character: P.normalize(src.character || {})
+        };
+        this.users[k] = rec;
+        imported++;
+      }
+      if (!imported) return { ok: false, msg: '没有可导入的账号' };
+      this.save();
+      if (this.current && !this.current.guest) {
+        var curKey = String(this.current.name || '').toLowerCase();
+        if (this.users[curKey]) {
+          this.current = this.users[curKey];
+          this.current.character = P.normalize(this.current.character);
+        }
+      }
+      return { ok: true, msg: '已导入 ' + imported + ' 个账号', imported: imported };
+    }
   };
 
   /* ==================================================================== UI */
@@ -197,12 +247,67 @@
     ['inUser', 'inPass'].forEach(function (id) {
       $(id).addEventListener('keydown', function (ev) { if (ev.key === 'Enter') self.submitAuth(); });
     });
+    $('#btnExportSave').addEventListener('click', function () { self.exportSave(); });
+    $('#btnImportSave').addEventListener('click', function () {
+      var inp = self.$('importSaveFile');
+      if (inp) inp.click();
+    });
+    $('#importSaveFile').addEventListener('change', function () {
+      var file = this.files && this.files[0];
+      this.value = '';
+      if (!file) return;
+      var reader = new global.FileReader();
+      reader.onload = function () {
+        var r = Accounts.importBackup(String(reader.result || ''));
+        if (!r.ok) return self.flash(r.msg);
+        self.flash(r.msg, true);
+        if (Accounts.current) {
+          self.renderHideoutHUD();
+          self.refreshPanel();
+        }
+      };
+      reader.onerror = function () { self.flash('读取文件失败'); };
+      reader.readAsText(file);
+    });
+    $('#btnHelpExport').addEventListener('click', function () { self.exportSave(); });
+    $('#btnHelpImport').addEventListener('click', function () {
+      var inp = self.$('importSaveFile');
+      if (inp) inp.click();
+    });
     $('#btnLogout').addEventListener('click', function () {
       Accounts.logout();
       self.closeAllPanels();
       self.showLogin();
       self.setMsg('已退出登录。', true);
     });
+    var bindExport = function () { self.exportSave(); };
+    var bindImport = function () {
+      var inp = self.$('importSaveFile');
+      if (inp) inp.click();
+    };
+    if ($('#btnExportSave')) $('#btnExportSave').addEventListener('click', bindExport);
+    if ($('#btnImportSave')) $('#btnImportSave').addEventListener('click', bindImport);
+    if ($('#btnHelpExport')) $('#btnHelpExport').addEventListener('click', bindExport);
+    if ($('#btnHelpImport')) $('#btnHelpImport').addEventListener('click', bindImport);
+    if ($('#importSaveFile')) {
+      $('#importSaveFile').addEventListener('change', function () {
+        var file = this.files && this.files[0];
+        this.value = '';
+        if (!file) return;
+        var reader = new global.FileReader();
+        reader.onload = function () {
+          var r = Accounts.importBackup(String(reader.result || ''));
+          if (!r.ok) return self.flash(r.msg);
+          self.flash(r.msg, true);
+          if (Accounts.current) {
+            self.renderHideoutHUD();
+            self.refreshPanel();
+          }
+        };
+        reader.onerror = function () { self.flash('读取文件失败'); };
+        reader.readAsText(file);
+      });
+    }
     $('#btnLoginChangelog').addEventListener('click', function () { self.openPanel('changelog'); });
     $('#btnHelpChangelog').addEventListener('click', function () { self.openPanel('changelog'); });
 
@@ -533,7 +638,7 @@
         '<div class="es-kicker">' + SLOT_LABEL[slot] + '</div>' +
         '<div class="es-icon"' + (rar ? ' style="border-color:' + rar.color + ';color:' + rar.color + '"' : '') + '>' +
         self.iconHtml(it || slot) + '</div>' +
-        '<div class="es-sub">' + (it ? I.power(it) : '空') + '</div>';
+        '<div class="es-sub">' + (it ? self.itemPower(it) : '空') + '</div>';
       if (it) {
         self.bindItemTooltip(row, it, slot);
         row.addEventListener('click', function (ev) {
@@ -646,13 +751,38 @@
     if (it.slot === 'ring') {
       var a = ch.equipped.ring1, b = ch.equipped.ring2;
       if (!a || !b) return true;
-      return I.power(it) > Math.min(I.power(a), I.power(b));
+      return this.itemPower(it) > Math.min(this.itemPower(a), this.itemPower(b));
     }
     var cur = ch.equipped[it.slot];
-    return !cur || I.power(it) > I.power(cur);
+    return !cur || this.itemPower(it) > this.itemPower(cur);
   };
 
   /** 与当前装备比较（戒指比两槽中较弱的那件，才是真实收益） */
+  /** 按角色下一推进层加权的战力 */
+  UI.prototype.itemPower = function (item) {
+    var ch = Accounts.char();
+    return I.power(item, ch ? P.targetMlvl(ch) : undefined);
+  };
+
+  UI.prototype.exportSave = function () {
+    try {
+      var text = Accounts.exportBackup();
+      var blob = new global.Blob([text], { type: 'application/json' });
+      var url = global.URL.createObjectURL(blob);
+      var a = doc.createElement('a');
+      var stamp = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = '时空猪-存档-' + stamp + '.json';
+      doc.body.appendChild(a);
+      a.click();
+      doc.body.removeChild(a);
+      global.URL.revokeObjectURL(url);
+      this.flash('存档已导出（含本地密码散列，请勿公开分享）', true);
+    } catch (e) {
+      this.flash('导出失败：' + (e && e.message ? e.message : '未知错误'));
+    }
+  };
+
   UI.prototype.compareTarget = function (item) {
     var ch = Accounts.char();
     if (!ch) return null;
@@ -660,7 +790,7 @@
       var a = ch.equipped.ring1, b = ch.equipped.ring2;
       if (!a) return b;
       if (!b) return a;
-      return I.power(a) <= I.power(b) ? a : b;
+      return this.itemPower(a) <= this.itemPower(b) ? a : b;
     }
     return ch.equipped[item.slot] || null;
   };
@@ -711,10 +841,10 @@
       return self.bagFilter === 'all' || it.slot === self.bagFilter;
     });
     var sorters = {
-      power: function (a, b) { return I.power(b) - I.power(a); },
-      ilvl: function (a, b) { return b.ilvl - a.ilvl || I.power(b) - I.power(a); },
+      power: function (a, b) { return self.itemPower(b) - self.itemPower(a); },
+      ilvl: function (a, b) { return b.ilvl - a.ilvl || self.itemPower(b) - self.itemPower(a); },
       rarity: function (a, b) {
-        return I.RARITY_BY_KEY[b.rarity].index - I.RARITY_BY_KEY[a.rarity].index || I.power(b) - I.power(a);
+        return I.RARITY_BY_KEY[b.rarity].index - I.RARITY_BY_KEY[a.rarity].index || self.itemPower(b) - self.itemPower(a);
       }
     };
     list.sort(sorters[this.bagSort] || sorters.power);
@@ -893,7 +1023,7 @@
     var rar = I.RARITY_BY_KEY[it.rarity];
     this.$('selName').className = 'tiny';
     this.$('selName').innerHTML = '<span style="color:' + rar.color + '">' + esc(it.name) +
-      (it.upgrade ? ' +' + it.upgrade : '') + '</span> <span class="muted">· 战力 ' + I.power(it) + '</span>' +
+      (it.upgrade ? ' +' + it.upgrade : '') + '</span> <span class="muted">· 战力 ' + this.itemPower(it) + '</span>' +
       (it.locked ? ' <span style="color:#ffd27a">· 已上锁</span>' : '');
     var inBag = found.where === 'inventory';
     this.$('actEquip').classList.toggle('hidden', !inBag);
@@ -918,7 +1048,6 @@
     var target = this.compareTarget(item);
     var foundItem = P.findItem(ch, item.uid);
     var isEquipped = !!(foundItem && foundItem.where === 'equipped');
-    var itemPower = I.power(item);
     var html = '';
     html += '<div class="tt-top">' + this.iconHtml(item) + '<div class="tt-top-text">';
     html += '<div class="tt-name" style="color:' + rar.color + '">' + esc(item.name) + (item.upgrade ? ' +' + item.upgrade : '') + '</div>';
@@ -958,7 +1087,9 @@
     if (item.affixes.length) {
       html += '<div class="tt-sec">';
       item.affixes.forEach(function (a) {
-        html += '<div class="tt-line"><span style="color:#9fd8ff">' + I.STAT_META[a.key].name + '</span><b style="color:#cfe9ff">' +
+        html += '<div class="tt-line"><span style="color:#9fd8ff">' + I.STAT_META[a.key].name +
+          (a.locked ? ' <span style="color:#ffd27a">锁</span>' : '') +
+          '</span><b style="color:#cfe9ff">' +
           I.fmtValue(a.key, a.value * I.upgradeMult(item)) + '</b></div>';
       });
       html += '</div>';
@@ -972,7 +1103,7 @@
     if (!isEquipped && target) {
       var diff = I.compare(target, item);
       var keys = Object.keys(diff);
-      var better = itemPower - I.power(target);
+      var better = this.itemPower(item) - this.itemPower(target);
       html += '<div class="tt-sec"><div class="tt-line"><span>对比当前装备</span><b class="' +
         (better >= 0 ? 'tt-up' : 'tt-down') + '">' + (better >= 0 ? '+' : '') + better + ' 战力</b></div>';
       keys.slice(0, 7).forEach(function (k) {
@@ -995,7 +1126,8 @@
     } else if (item.locked) {
       html += '<div class="tt-foot" style="color:#ffd27a">已上锁：卸下后也无法被分解/出售</div>';
     }
-    html += '<div class="tt-foot">战力评分 ' + itemPower + '</div>';
+    html += '<div class="tt-foot">战力评分 ' + this.itemPower(item) +
+      ' <span class="muted">（按下一推进层加权）</span></div>';
 
     tip.innerHTML = html;
     tip.classList.remove('hidden');
@@ -1047,6 +1179,13 @@
     this.sound && this.sound.play('click');
     this.afterChange(r.locked ? '已上锁，不会被分解或出售' : '已解锁');
   };
+  UI.prototype.actionToggleAffixLock = function (index) {
+    var ch = Accounts.char();
+    var r = P.toggleAffixLock(ch, this.selUid, index);
+    if (!r.ok) return this.flash(r.reason);
+    this.sound && this.sound.play('click');
+    this.afterChange(r.locked ? '已锁定该词条，重铸时保留数值' : '已解锁该词条');
+  };
   UI.prototype.actionSalvage = function () {
     var ch = Accounts.char();
     var r = P.salvage(ch, this.selUid);
@@ -1076,7 +1215,7 @@
       }
     });
     if (!changed) return this.flash('没有找到更强的装备');
-    this.afterChange('已自动换上 ' + changed + ' 件更强的装备');
+    this.afterChange('已自动换上 ' + changed + ' 件（按下一推进层 mlvl ' + P.targetMlvl(ch) + ' 加权）');
   };
 
   /**
@@ -1097,7 +1236,7 @@
     var threshold = 0;
     var groupOf = { weapon: 'weapon', helm: 'helm', armor: 'armor', boots: 'boots', amulet: 'amulet', ring1: 'ring', ring2: 'ring' };
     I.EQUIP_SLOTS.forEach(function (s) {
-      if (ch.equipped[s]) threshold = Math.max(threshold, I.power(ch.equipped[s]) * 0.8);
+      if (ch.equipped[s]) threshold = Math.max(threshold, self.itemPower(ch.equipped[s]) * 0.8);
     });
     if (threshold <= 0) return this.flash('请先装备一些物品，再按战力清理背包');
 
@@ -1105,7 +1244,7 @@
     var doomed = 0, protectedCount = 0;
     ch.inventory.forEach(function (it) {
       if (isProtectedFromJunk(ch, it)) { protectedCount++; return; }
-      if (I.power(it) <= threshold) doomed++;
+      if (self.itemPower(it) <= threshold) doomed++;
     });
     if (!doomed) {
       return this.flash(protectedCount
@@ -1174,7 +1313,7 @@
       var it = ch.equipped[slot];
       if (it) rows.push({ item: it, where: 'equipped', slotName: I.SLOT_META[slot].name });
     });
-    ch.inventory.slice().sort(function (a, b) { return I.power(b) - I.power(a); }).forEach(function (it) {
+    ch.inventory.slice().sort(function (a, b) { return self.itemPower(b) - self.itemPower(a); }).forEach(function (it) {
       rows.push({ item: it, where: 'inventory', slotName: I.SLOT_META[it.slot].name });
     });
     if (!rows.length) {
@@ -1194,7 +1333,7 @@
         (it.locked ? ' <span style="color:#ffd27a;font-size:12px">锁</span>' : '') + '</div>' +
         '<div class="fr-sub">' + (row.where === 'equipped' ? '已装备 · ' : '') +
         (it.locked ? '已上锁 · ' : '') +
-        row.slotName + ' · ilvl ' + it.ilvl + ' · 战力 ' + I.power(it) + '</div></div>';
+        row.slotName + ' · ilvl ' + it.ilvl + ' · 战力 ' + self.itemPower(it) + '</div></div>';
       node.addEventListener('click', function (ev) {
         ev.stopPropagation();
         self.selUid = it.uid;
@@ -1217,7 +1356,7 @@
       var card = el('div', 'shop-item');
       card.innerHTML = '<div class="si-body">' +
         '<div class="si-name" style="color:' + rar.color + '">' + esc(it.name) + (it.upgrade ? ' +' + it.upgrade : '') + '</div>' +
-        '<div class="si-desc">' + rar.name + ' · ilvl ' + it.ilvl + ' · 战力 ' + I.power(it) + ' · 词条 ' + it.affixes.length + ' 条</div>' +
+        '<div class="si-desc">' + rar.name + ' · ilvl ' + it.ilvl + ' · 战力 ' + self.itemPower(it) + ' · 词条 ' + it.affixes.length + ' 条</div>' +
         '</div>';
       body.appendChild(card);
       this.$('forgeMsg').textContent = '';
@@ -1233,12 +1372,33 @@
       upRow.appendChild(upBtn);
       body.appendChild(upRow);
 
+      if (it.affixes.length) {
+        var lockBox = el('div', 'affix-lock-box');
+        lockBox.innerHTML = '<div class="si-name" style="margin-bottom:6px">词条锁定 <span class="tiny muted">最多 ' +
+          I.MAX_AFFIX_LOCKS + ' 条 · 已锁 ' + I.lockedAffixCount(it) + '</span></div>';
+        it.affixes.forEach(function (af, idx) {
+          var row = el('div', 'affix-lock-row' + (af.locked ? ' on' : ''));
+          var meta = I.STAT_META[af.key] || { name: af.key };
+          row.innerHTML = '<span class="al-name">' + esc(meta.name) + ' ' +
+            I.fmtValue(af.key, af.value * I.upgradeMult(it)) + '</span>';
+          var btn = el('button', 'tiny-btn' + (af.locked ? ' gold' : ''), af.locked ? '解锁' : '锁定');
+          btn.addEventListener('click', function () { self.actionToggleAffixLock(idx); });
+          row.appendChild(btn);
+          lockBox.appendChild(row);
+        });
+        body.appendChild(lockBox);
+      }
+
       var reCost = I.rerollCost(it);
+      var lockedN = I.lockedAffixCount(it);
+      var freeN = it.affixes.length - lockedN;
       var reRow = el('div', 'shop-item');
       reRow.innerHTML = '<div class="si-body"><div class="si-name">重铸词条</div>' +
-        '<div class="si-desc">保留种类、重掷数值 ｜ 消耗 ' + reCost.coins + ' 金币 + ' + reCost.rerolls + ' 重铸石</div></div>';
+        '<div class="si-desc">保留种类、重掷未锁数值' +
+        (lockedN ? '（跳过 ' + lockedN + ' 条已锁）' : '') +
+        ' ｜ 消耗 ' + reCost.coins + ' 金币 + ' + reCost.rerolls + ' 重铸石</div></div>';
       var reBtn = el('button', 'tiny-btn', '重铸');
-      reBtn.disabled = !it.affixes.length || ch.coins < reCost.coins || ch.materials.re < reCost.rerolls;
+      reBtn.disabled = !it.affixes.length || freeN <= 0 || ch.coins < reCost.coins || ch.materials.re < reCost.rerolls;
       reBtn.addEventListener('click', function () { self.actionReroll(); });
       reRow.appendChild(reBtn);
       body.appendChild(reRow);
@@ -1427,6 +1587,9 @@
         '<span class="bi-flag' + (pick > cleared ? '' : ' hidden') + '" id="ff-' + key + '">新层</span>' +
         '<div class="bi-mlvl" id="fm-' + key + '">怪物等级 ' + mlvl + '</div></div></div>' +
         '<div class="bi-sub">首领 · ' + esc(bossName) + ' · 已通关 ' + cleared + ' 层</div>' +
+        (b.hazard
+          ? '<div class="bi-sub" style="color:#ffd08a">危害 · ' + esc(b.hazard.name) + '：' + esc(b.hazard.desc) + '</div>'
+          : '') +
         '</div></div>';
 
       if (maxF > 1) {
@@ -1950,13 +2113,13 @@
     if (!summary.loot.length) {
       list.appendChild(el('div', 'tiny muted', '这一趟没有拾取到装备。'));
     } else {
-      summary.loot.slice().sort(function (a, b) { return I.power(b) - I.power(a); }).forEach(function (it) {
+      summary.loot.slice().sort(function (a, b) { return self.itemPower(b) - self.itemPower(a); }).forEach(function (it) {
         var rar = I.RARITY_BY_KEY[it.rarity];
         var line = el('div', 'loot-line');
         line.innerHTML = '<div class="ll-slot" style="border-color:' + rar.color + ';color:' + rar.color + '">' +
           self.iconHtml(it) + '</div>' +
           '<div class="ll-name" style="color:' + rar.color + '">' + esc(it.name) + (it.upgrade ? ' +' + it.upgrade : '') + '</div>' +
-          '<div class="ll-pow">ilvl ' + it.ilvl + ' · 战力 ' + I.power(it) + '</div>';
+          '<div class="ll-pow">ilvl ' + it.ilvl + ' · 战力 ' + self.itemPower(it) + '</div>';
         list.appendChild(line);
       });
     }

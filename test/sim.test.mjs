@@ -245,6 +245,8 @@ test('荆棘反伤与传说独特效果（噬魂/狂怒）', () => {
 test('击杀会掉落金币，并可能掉落装备与材料', () => {
   const w = makeWorld();
   w.enemies.length = 0;
+  // 关掉自动刷怪，避免群系危害刷怪干扰掉落抽样
+  w.updateSpawns = function () {};
   for (let i = 0; i < 120; i++) {
     const e = w.spawnEnemy('calf');
     e.x = w.player.x + 60; e.y = w.player.y; e.spawnT = 0; e.hp = 1;
@@ -253,9 +255,9 @@ test('击杀会掉落金币，并可能掉落装备与材料', () => {
     w.update(0.42, { mx: 0, my: 0, attack: false }); // 让 dying 与掉落推进
   }
   assert.ok(w.kills > 100, '应完成大量击杀: ' + w.kills);
-  assert.ok(w.pickups.some((k) => k.kind === 'coin'), '应掉落金币');
-  assert.ok(w.pickups.some((k) => k.kind === 'item'), '应掉落装备');
-  assert.ok(w.pickups.some((k) => k.kind === 'upstone'), '应掉落强化石');
+  assert.ok(w.pickups.some((k) => k.kind === 'coin') || w.coins > 0, '应掉落金币');
+  assert.ok(w.pickups.some((k) => k.kind === 'item') || w.loot.length > 0, '应掉落装备');
+  assert.ok(w.pickups.some((k) => k.kind === 'upstone') || w.upStones > 0, '应掉落强化石');
 });
 
 test('掉落装备的 ilvl 与副本怪物等级挂钩', () => {
@@ -625,6 +627,56 @@ test('怪物图鉴字段：每种敌人都有群系与描述', () => {
     assert.ok(e.desc && e.tip, key + ' 缺少图鉴文案');
     assert.ok(SP.KIND_LABEL[e.kind], key + ' 缺少 kind 标签');
   }
+});
+
+test('四群系都登记了环境危害', () => {
+  for (const key of SP.BIOME_ORDER) {
+    const b = SP.BIOMES[key];
+    assert.ok(b.hazard && b.hazard.key && b.hazard.name && b.hazard.desc, key + ' 缺少 hazard');
+  }
+  assert.equal(SP.BIOMES.camp.hazard.key, 'stampede');
+  assert.equal(SP.BIOMES.forest.hazard.key, 'spores');
+  assert.equal(SP.BIOMES.cave.hazard.key, 'shatter');
+  assert.equal(SP.BIOMES.nest.hazard.key, 'brood');
+});
+
+test('孢子毒雾会对站立玩家造成 soft 伤害', () => {
+  const w = makeWorld({ seed: 77, biome: 'forest', floor: 2 });
+  w.enemies.length = 0;
+  w.player.vx = 0; w.player.vy = 0;
+  const hp0 = w.player.hp;
+  for (let i = 0; i < 120; i++) w.update(1 / 60, { mx: 0, my: 0 });
+  assert.ok(w.player.hp < hp0, '毒雾应扣血');
+  assert.equal(w.player.invuln, 0, 'soft 伤害不应上无敌帧');
+});
+
+test('碎晶坠落会生成危害预警并在落地时结算', () => {
+  const w = makeWorld({ seed: 78, biome: 'cave', floor: 1 });
+  w.enemies.length = 0;
+  w.hazardTimer = 0;
+  w.updateHazards(0.016);
+  assert.ok(w.hazards.length >= 1, '应生成碎晶预警');
+  const hz = w.hazards[0];
+  hz.x = w.player.x; hz.y = w.player.y; hz.life = 0;
+  const hp0 = w.player.hp;
+  w.updateHazards(0.016);
+  assert.equal(w.hazards.length, 0, '落地后危害应移除');
+  assert.ok(w.player.hp < hp0, '落在玩家身上应造成伤害');
+});
+
+test('践踏潮提高冲锋刷新占比；巢穴狂潮提高场上目标数', () => {
+  const camp = makeWorld({ seed: 79, biome: 'camp', floor: 1 });
+  let charger = 0;
+  for (let i = 0; i < 400; i++) {
+    if (camp.pickSpawnKey() === camp.biome.enemies.charger) charger++;
+  }
+  assert.ok(charger > 140, '践踏潮冲锋占比应明显提高: ' + charger);
+
+  const nest = makeWorld({ seed: 80, biome: 'nest', floor: 1 });
+  const base = makeWorld({ seed: 80, biome: 'cave', floor: 1 });
+  assert.ok(nest.aliveTarget > base.aliveTarget, '巢穴场上目标数应更高');
+  const boss = nest.spawnEnemy(nest.biome.enemies.boss);
+  assert.ok(boss.summonN > SP.ENEMY_TYPES.queen.summonN, '巢穴首领召唤更多');
 });
 
 test('传说武器·超载：提升技能伤害并缩短震击冷却', () => {

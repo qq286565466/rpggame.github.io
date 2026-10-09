@@ -351,6 +351,57 @@ test('随机武器会落到新型号上，且保留 base 字段', () => {
   }
 });
 
+test('目标层加权：深层更看重护甲/生命，浅层更看重攻击', () => {
+  const atkItem = {
+    slot: 'weapon', rarity: 'rare', ilvl: 20, upgrade: 0, unique: null,
+    stats: { atk: 40, crit: 8 }, affixes: []
+  };
+  const tankItem = {
+    slot: 'armor', rarity: 'rare', ilvl: 20, upgrade: 0, unique: null,
+    stats: { hp: 120, armor: 40 }, affixes: []
+  };
+  const shallowAtk = I.power(atkItem, 3);
+  const shallowTank = I.power(tankItem, 3);
+  const deepAtk = I.power(atkItem, 24);
+  const deepTank = I.power(tankItem, 24);
+  assert.ok(shallowAtk > shallowTank, '浅层进攻装应更高分');
+  assert.ok(deepTank > deepAtk, '深层坦克装应更高分');
+  assert.ok(I.power(atkItem) > 0);
+  const W0 = I.powerWeights(0);
+  const W24 = I.powerWeights(24);
+  assert.ok(W24.armor > W0.armor);
+  assert.ok(W24.atk < W0.atk);
+});
+
+test('词条锁定：最多 2 条，重铸跳过已锁数值', () => {
+  const rng = SP.makeRng(31);
+  let it = null;
+  for (let i = 0; i < 300 && !it; i++) {
+    const cand = I.roll(rng, { ilvl: 28, rarityBias: 2.5 });
+    if (cand.affixes.length >= 3) it = cand;
+  }
+  assert.ok(it, '应抽到至少 3 词条装备');
+  assert.equal(I.toggleAffixLock(it, 0).ok, true);
+  assert.equal(it.affixes[0].locked, true);
+  assert.equal(I.toggleAffixLock(it, 1).ok, true);
+  assert.equal(I.lockedAffixCount(it), 2);
+  const third = I.toggleAffixLock(it, 2);
+  assert.equal(third.ok, false, '第 3 条不应再锁');
+  assert.ok(I.rerollCost(it).rerolls >= 3, '锁词条应提高重铸石消耗');
+
+  const lockedVal = it.affixes[0].value;
+  const unlockedBefore = it.affixes[2].value;
+  let changedFree = false;
+  for (let i = 0; i < 20; i++) {
+    I.reroll(rng, it);
+    assert.equal(it.affixes[0].value, lockedVal, '锁定词条数值不应变');
+    assert.equal(it.affixes[0].locked, true);
+    if (Math.abs(it.affixes[2].value - unlockedBefore) > 1e-6) changedFree = true;
+  }
+  assert.ok(changedFree, '未锁定词条应能被重铸');
+  assert.equal(I.toggleAffixLock(it, 0).locked, false);
+});
+
 test('传说武器可抽到武器专属独特，防具不会', () => {
   const weaponOnly = I.UNIQUES.filter((u) => u.slots && u.slots.indexOf('weapon') >= 0).map((u) => u.key);
   assert.ok(weaponOnly.length >= 6, '应至少有 6 个武器专属传说');
