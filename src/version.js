@@ -3,13 +3,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.7.0';
+  SP.VERSION = '2.7.1';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.7.1',
+      date: '2026-10-09',
+      title: '怪物立绘进战斗',
+      items: [
+        '副本内首领血条、登场横幅与场上头像显示怪物立绘',
+        '时空传送门各群系卡片展示关底首领立绘',
+        '小地图上的首领标记改为立绘图标'
+      ]
+    },
     {
       version: '2.7.0',
       date: '2026-10-09',

@@ -563,8 +563,20 @@
   .hud-tr { position: absolute; right: 14px; top: 12px; text-align: right; display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
   .hud-stat { font-size: 12px; background: rgba(10, 8, 20, .6); border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; font-variant-numeric: tabular-nums; }
   .hud-timer { font-size: 25px; font-weight: 800; font-variant-numeric: tabular-nums; text-shadow: 0 0 18px rgba(130, 200, 255, .5); }
-  .banner { position: absolute; left: 50%; top: 15%; transform: translateX(-50%); font-size: 29px; font-weight: 800; letter-spacing: 5px; opacity: 0; text-shadow: 0 0 26px rgba(255, 140, 90, .8); white-space: nowrap; }
+  .banner {
+    position: absolute; left: 50%; top: 15%; transform: translateX(-50%);
+    display: inline-flex; align-items: center; gap: 10px; justify-content: center;
+    font-size: 29px; font-weight: 800; letter-spacing: 5px; opacity: 0;
+    text-shadow: 0 0 26px rgba(255, 140, 90, .8); white-space: nowrap; max-width: min(92vw, 640px);
+  }
   .banner.show { animation: bannerIn 2.1s ease forwards; }
+  .banner.has-mob span { display: inline-block; }
+  .banner-mob {
+    width: 40px; height: 40px; border-radius: 50%; flex: none;
+    border: 2px solid rgba(255, 180, 120, .5); object-fit: cover;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    box-shadow: 0 0 14px rgba(255, 120, 60, .35);
+  }
   @keyframes bannerIn {
     0% { opacity: 0; transform: translateX(-50%) scale(.82); }
     16% { opacity: 1; transform: translateX(-50%) scale(1); }
@@ -599,8 +611,23 @@
   #slotDash { color: #a8f0ff; } #slotSteak { color: #ffb27a; }
   .boss-bar { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); width: min(560px, 62vw); display: none; }
   .boss-bar.on { display: block; }
+  .boss-bar .bb-row { display: flex; align-items: center; gap: 10px; }
+  .boss-bar .bb-portrait {
+    width: 44px; height: 44px; flex: none; border-radius: 50%; overflow: hidden;
+    border: 2px solid rgba(255, 180, 120, .55); background: #141a28;
+    box-shadow: 0 0 12px rgba(255, 120, 60, .25);
+  }
+  .boss-bar .bb-portrait:not(.has-img) { display: none; }
+  .boss-bar .bb-portrait img {
+    display: block; width: 100%; height: 100%; object-fit: cover;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+  }
+  .boss-bar .bb-body { flex: 1; min-width: 0; }
   .boss-bar .bb-name { font-size: 12.5px; text-align: center; margin-bottom: 3px; color: #ffcfa8; letter-spacing: 2px; }
   .boss-bar .bar > i { background: linear-gradient(90deg, #ff9a4a, #ff3a3a); }
+  .bi-head { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 6px; }
+  .bi-head-body { flex: 1; min-width: 0; }
+  .be-portrait.bi-boss-portrait { width: 48px; height: 48px; }
   .combo { position: absolute; left: 50%; top: 44%; transform: translateX(-50%); font-size: 22px; font-weight: 800; color: var(--gold); opacity: 0; transition: opacity .2s; text-shadow: 0 0 16px rgba(255, 200, 60, .8); }
   .combo.on { opacity: 1; }
 
@@ -1074,8 +1101,13 @@
       </div>
 
       <div class="boss-bar" id="bossBar">
-        <div class="bb-name" id="bossName">关底首领</div>
-        <div class="bar"><i id="bossHpBar"></i></div>
+        <div class="bb-row">
+          <div class="bb-portrait" id="bossPortrait"><img id="bossPortraitImg" alt="" draggable="false"></div>
+          <div class="bb-body">
+            <div class="bb-name" id="bossName">关底首领</div>
+            <div class="bar"><i id="bossHpBar"></i></div>
+          </div>
+        </div>
       </div>
 
       <div class="loot-feed" id="lootFeed"></div>
@@ -1272,13 +1304,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.7.0';
+  SP.VERSION = '2.7.1';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.7.1',
+      date: '2026-10-09',
+      title: '怪物立绘进战斗',
+      items: [
+        '副本内首领血条、登场横幅与场上头像显示怪物立绘',
+        '时空传送门各群系卡片展示关底首领立绘',
+        '小地图上的首领标记改为立绘图标'
+      ]
+    },
     {
       version: '2.7.0',
       date: '2026-10-09',
@@ -4851,6 +4893,14 @@
     return true;
   };
 
+  /** 怪物立绘（icon-mob-<key>），用于场上头像与小地图 */
+  Renderer.prototype.drawMobIcon = function (ctx, enemyKey, x, y, sz) {
+    var icons = SP.ItemIcons;
+    if (!icons || !icons.forEnemy) return false;
+    var key = icons.forEnemy(enemyKey);
+    return key ? this.drawItemIcon(ctx, key, x, y, sz) : false;
+  };
+
   /** 掉落物上标注部位的汉字（比 emoji 更可靠，不依赖字体回退） */
   Renderer.prototype.slotGlyph = function (slot) {
     switch (slot) {
@@ -5724,6 +5774,17 @@
     }
     ctx.restore();
 
+    // 首领立绘（血条上方）
+    if (e.boss && e.dying <= 0) {
+      var psz = Math.round(Math.min(34, e.r * 1.05));
+      var ppy = y - e.r - 52;
+      if (this.drawMobIcon(ctx, e.key, x, ppy, psz)) {
+        ctx.strokeStyle = 'rgba(255, 140, 80, 0.75)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(x, ppy, psz * 0.56, 0, TAU); ctx.stroke();
+      }
+    }
+
     // 血条
     if (e.dying <= 0 && (e.hp < e.maxHp || e.boss)) {
       var bw = Math.max(30, e.r * 2.2), bh = e.boss ? 6 : 4.4;
@@ -5769,8 +5830,11 @@
       var e = world.enemies[ei];
       if (e.dying > 0) continue;
       var ep = M(e.x, e.y);
-      ctx.fillStyle = e.boss ? '#ff6a3a' : '#ff5b5b';
-      ctx.beginPath(); ctx.arc(ep.x, ep.y, e.boss ? 4.2 : 2.7, 0, TAU); ctx.fill();
+      if (e.boss && this.drawMobIcon(ctx, e.key, ep.x, ep.y, 14)) { /* 首领用小立绘 */ }
+      else {
+        ctx.fillStyle = e.boss ? '#ff6a3a' : '#ff5b5b';
+        ctx.beginPath(); ctx.arc(ep.x, ep.y, e.boss ? 4.2 : 2.7, 0, TAU); ctx.fill();
+      }
     }
     // 玩家
     var pp = M(world.player.x, world.player.y);
@@ -6566,8 +6630,9 @@
     opts = opts || {};
     var sizeClass = opts.detail ? 'bd-portrait' : 'be-portrait';
     var src = SP.ItemIcons && SP.ItemIcons.enemyUrl && SP.ItemIcons.enemyUrl(enemyKey);
-    if (opts.discovered && src) {
-      return '<div class="' + sizeClass + ' has-img"><img alt="" draggable="false" src="' + src + '"></div>';
+    if ((opts.discovered || opts.preview) && src) {
+      var extra = opts.preview ? ' bi-boss-portrait' : '';
+      return '<div class="' + sizeClass + extra + ' has-img"><img alt="" draggable="false" src="' + src + '"></div>';
     }
     var bg = opts.discovered
       ? (opts.color || '#445')
@@ -7277,10 +7342,14 @@
         var have = P.clearedFloor(ch, prevKey);
         var pct = need ? Math.max(0, Math.min(100, 100 * have / need)) : 0;
         item.innerHTML =
+          '<div class="bi-head">' +
+          self.enemyPortraitHtml(b.enemies.boss, { preview: true, detail: false }) +
+          '<div class="bi-head-body">' +
           '<div class="bi-top"><div class="bi-name">' + b.name + '</div>' +
           '<span class="bi-flag lock">未解锁</span></div>' +
           '<div class="bi-sub">首领 · ' + esc(bossName) + '</div>' +
           '<div class="bi-sub">通关「' + SP.BIOMES[prevKey].name + '」' + need + ' 层后开启</div>' +
+          '</div></div>' +
           '<div class="bar" title="解锁进度"><i style="width:' + pct.toFixed(0) + '%"></i></div>' +
           '<div class="tiny muted">' + have + ' / ' + need + ' 层</div>';
         wrap.appendChild(item);
@@ -7293,11 +7362,15 @@
       var pick = self.floorPick[key];
       var mlvl = b.mlvlBase + (pick - 1);
       item.innerHTML =
+        '<div class="bi-head">' +
+        self.enemyPortraitHtml(b.enemies.boss, { preview: true, detail: false }) +
+        '<div class="bi-head-body">' +
         '<div class="bi-top"><div class="bi-name">' + b.name + '</div>' +
         '<div class="bi-side">' +
         '<span class="bi-flag' + (pick > cleared ? '' : ' hidden') + '" id="ff-' + key + '">新层</span>' +
         '<div class="bi-mlvl" id="fm-' + key + '">怪物等级 ' + mlvl + '</div></div></div>' +
-        '<div class="bi-sub">首领 · ' + esc(bossName) + ' · 已通关 ' + cleared + ' 层</div>';
+        '<div class="bi-sub">首领 · ' + esc(bossName) + ' · 已通关 ' + cleared + ' 层</div>' +
+        '</div></div>';
 
       if (maxF > 1) {
         var ctrl = el('div', 'floor-ctrl');
@@ -7726,9 +7799,20 @@
     if (boss) {
       bb.classList.add('on');
       if (c.bossName !== boss.name) { c.bossName = boss.name; $('bossName').textContent = boss.name; }
+      if (c.bossKey !== boss.key) {
+        c.bossKey = boss.key;
+        var bUrl = SP.ItemIcons && SP.ItemIcons.enemyUrl(boss.key);
+        var bImg = $('bossPortraitImg');
+        var bWrap = $('bossPortrait');
+        if (bUrl && bImg && bWrap) {
+          bImg.src = bUrl;
+          bWrap.classList.add('has-img');
+        } else if (bWrap) bWrap.classList.remove('has-img');
+      }
       width('bossHpBar', (100 * SP.clamp(boss.hp / boss.maxHp, 0, 1)).toFixed(1) + '%');
     } else if (bb.classList.contains('on')) {
       bb.classList.remove('on');
+      c.bossKey = null;
     }
   };
 
@@ -7770,10 +7854,17 @@
     });
   };
 
-  UI.prototype.banner = function (text, color) {
+  UI.prototype.banner = function (text, color, enemyKey) {
     var e = this.$('banner');
     if (!e) return;
-    e.textContent = text;
+    var mobUrl = enemyKey && SP.ItemIcons && SP.ItemIcons.enemyUrl(enemyKey);
+    if (mobUrl) {
+      e.innerHTML = '<img class="banner-mob" alt="" draggable="false" src="' + mobUrl + '"><span>' + esc(text) + '</span>';
+      e.classList.add('has-mob');
+    } else {
+      e.textContent = text;
+      e.classList.remove('has-mob');
+    }
     e.style.color = color || '#ffb87a';
     e.classList.remove('show');
     void e.offsetWidth;
@@ -8258,7 +8349,7 @@
         case 'volley': sound.play('summon'); break;
         case 'boss_wave':
           sound.play('boss');
-          ui.banner('关底首领 · ' + e.data.name, '#ff9c5b');
+          ui.banner('关底首领 · ' + e.data.name, '#ff9c5b', e.data.boss);
           break;
         case 'clear':
           sound.play('bossdown');

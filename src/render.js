@@ -690,6 +690,14 @@
     return true;
   };
 
+  /** 怪物立绘（icon-mob-<key>），用于场上头像与小地图 */
+  Renderer.prototype.drawMobIcon = function (ctx, enemyKey, x, y, sz) {
+    var icons = SP.ItemIcons;
+    if (!icons || !icons.forEnemy) return false;
+    var key = icons.forEnemy(enemyKey);
+    return key ? this.drawItemIcon(ctx, key, x, y, sz) : false;
+  };
+
   /** 掉落物上标注部位的汉字（比 emoji 更可靠，不依赖字体回退） */
   Renderer.prototype.slotGlyph = function (slot) {
     switch (slot) {
@@ -1563,6 +1571,17 @@
     }
     ctx.restore();
 
+    // 首领立绘（血条上方）
+    if (e.boss && e.dying <= 0) {
+      var psz = Math.round(Math.min(34, e.r * 1.05));
+      var ppy = y - e.r - 52;
+      if (this.drawMobIcon(ctx, e.key, x, ppy, psz)) {
+        ctx.strokeStyle = 'rgba(255, 140, 80, 0.75)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(x, ppy, psz * 0.56, 0, TAU); ctx.stroke();
+      }
+    }
+
     // 血条
     if (e.dying <= 0 && (e.hp < e.maxHp || e.boss)) {
       var bw = Math.max(30, e.r * 2.2), bh = e.boss ? 6 : 4.4;
@@ -1608,8 +1627,11 @@
       var e = world.enemies[ei];
       if (e.dying > 0) continue;
       var ep = M(e.x, e.y);
-      ctx.fillStyle = e.boss ? '#ff6a3a' : '#ff5b5b';
-      ctx.beginPath(); ctx.arc(ep.x, ep.y, e.boss ? 4.2 : 2.7, 0, TAU); ctx.fill();
+      if (e.boss && this.drawMobIcon(ctx, e.key, ep.x, ep.y, 14)) { /* 首领用小立绘 */ }
+      else {
+        ctx.fillStyle = e.boss ? '#ff6a3a' : '#ff5b5b';
+        ctx.beginPath(); ctx.arc(ep.x, ep.y, e.boss ? 4.2 : 2.7, 0, TAU); ctx.fill();
+      }
     }
     // 玩家
     var pp = M(world.player.x, world.player.y);
