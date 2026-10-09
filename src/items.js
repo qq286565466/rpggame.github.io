@@ -368,17 +368,47 @@
     return out;
   }
 
-  /** 综合战力评分，用于排序与「是否更好」的粗判 */
+  /**
+   * 综合战力评分。
+   * targetMlvl 可选：按目标怪物等级加权 —— 深层更看重生命/护甲等生存属性，
+   * 浅层更偏进攻，避免一键换装在高压层穿成玻璃炮。
+   */
   var WEIGHT = {
     atk: 3.2, atkPct: 3.0, hp: 0.35, hpPct: 2.6, armor: 1.1, crit: 3.4, critDmg: 0.55,
     aspd: 2.4, move: 1.6, lifesteal: 5.0, regen: 1.6, thorns: 0.9, pickup: 0.12,
     greed: 0.8, luck: 1.2, skillDmg: 1.1, cdr: 1.3
   };
-  function power(item) {
+  function powerWeights(targetMlvl) {
+    var m = Math.max(0, Number(targetMlvl) || 0);
+    if (!m) return WEIGHT;
+    // mlvl 1→约 0；mlvl 10→约 0.4；mlvl 22+→趋近 1
+    var pressure = Math.max(0, Math.min(1, (m - 4) / 18));
+    return {
+      atk: 3.2 - pressure * 0.7,
+      atkPct: 3.0 - pressure * 0.55,
+      hp: 0.35 + pressure * 0.65,
+      hpPct: 2.6 + pressure * 1.1,
+      armor: 1.1 + pressure * 2.4,
+      crit: 3.4 - pressure * 0.9,
+      critDmg: 0.55 - pressure * 0.12,
+      aspd: 2.4 - pressure * 0.35,
+      move: 1.6 + pressure * 0.35,
+      lifesteal: 5.0 + pressure * 1.4,
+      regen: 1.6 + pressure * 1.2,
+      thorns: 0.9 + pressure * 0.4,
+      pickup: 0.12,
+      greed: 0.8 - pressure * 0.25,
+      luck: 1.2 - pressure * 0.2,
+      skillDmg: 1.1 + pressure * 0.15,
+      cdr: 1.3 + pressure * 0.35
+    };
+  }
+  function power(item, targetMlvl) {
     if (!item) return 0;
+    var W = powerWeights(targetMlvl);
     var s = itemStats(item), total = 0;
-    Object.keys(s).forEach(function (k) { total += (WEIGHT[k] || 0.5) * s[k]; });
-    if (item.unique) total += 40;
+    Object.keys(s).forEach(function (k) { total += (W[k] || 0.5) * s[k]; });
+    if (item.unique) total += 40 + (targetMlvl ? Math.min(18, (Number(targetMlvl) || 0) * 0.4) : 0);
     return Math.round(total);
   }
 
@@ -409,6 +439,8 @@
 
   /* --------------------------------------------------------- 强化 / 重铸 / 分解 */
   var UPGRADE_CAP = 12;
+  /** 重铸时可锁定的词条上限（锁住的不重掷数值） */
+  var MAX_AFFIX_LOCKS = 2;
   function upgradeCost(item) {
     var lv = item.upgrade || 0;
     var rarity = RARITY_BY_KEY[item.rarity];
@@ -420,13 +452,43 @@
   }
   function canUpgrade(item) { return (item.upgrade || 0) < UPGRADE_CAP; }
 
+  function lockedAffixCount(item) {
+    if (!item || !item.affixes) return 0;
+    var n = 0;
+    for (var i = 0; i < item.affixes.length; i++) if (item.affixes[i].locked) n++;
+    return n;
+  }
+
+  /** 切换单条词条锁定；最多 MAX_AFFIX_LOCKS 条 */
+  function toggleAffixLock(item, index) {
+    if (!item || !item.affixes || !item.affixes.length) {
+      return { ok: false, reason: '这件装备没有词条' };
+    }
+    var af = item.affixes[index];
+    if (!af) return { ok: false, reason: '词条不存在' };
+    if (af.locked) {
+      af.locked = false;
+      return { ok: true, locked: false, item: item, index: index };
+    }
+    if (lockedAffixCount(item) >= MAX_AFFIX_LOCKS) {
+      return { ok: false, reason: '最多锁定 ' + MAX_AFFIX_LOCKS + ' 条词条' };
+    }
+    af.locked = true;
+    return { ok: true, locked: true, item: item, index: index };
+  }
+
   function rerollCost(item) {
     var rarity = RARITY_BY_KEY[item.rarity];
-    return { coins: Math.round((40 + item.ilvl * 9) * (1 + rarity.index * 0.2)), rerolls: 1 };
+    var locks = lockedAffixCount(item);
+    return {
+      coins: Math.round((40 + item.ilvl * 9) * (1 + rarity.index * 0.2) * (1 + locks * 0.35)),
+      rerolls: 1 + locks
+    };
   }
-  /** 重铸：保留词条种类，重新掷数值 */
+  /** 重铸：保留词条种类，重新掷数值；已锁定词条跳过 */
   function reroll(rng, item) {
     item.affixes.forEach(function (af) {
+      if (af.locked) return;
       var def = AFFIX_BY_KEY[af.key];
       if (!def) return;
       var rarity = RARITY_BY_KEY[item.rarity];
@@ -489,6 +551,7 @@
     uniquesForSlot: uniquesForSlot,
     pickUnique: pickUnique,
     UPGRADE_CAP: UPGRADE_CAP,
+    MAX_AFFIX_LOCKS: MAX_AFFIX_LOCKS,
     fmt: fmt,
     fmtValue: fmtValue,
     baselineOf: baselineOf,
@@ -496,11 +559,14 @@
     weaponProfile: weaponProfile,
     roll: roll,
     itemStats: itemStats,
+    powerWeights: powerWeights,
     power: power,
     aggregate: aggregate,
     equipInto: equipInto,
     upgradeCost: upgradeCost,
     canUpgrade: canUpgrade,
+    lockedAffixCount: lockedAffixCount,
+    toggleAffixLock: toggleAffixLock,
     rerollCost: rerollCost,
     reroll: reroll,
     salvageYield: salvageYield,

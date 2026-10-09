@@ -528,6 +528,21 @@
   .forge-row .fr-sub { font-size: 10.5px; color: var(--muted); }
   .forge-work { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .forge-work .help { margin-top: auto; padding-top: 10px; }
+  .affix-lock-box {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    background: rgba(20, 16, 32, .45);
+  }
+  .affix-lock-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.04);
+  }
+  .affix-lock-row:last-child { border-bottom: 0; }
+  .affix-lock-row .al-name { flex: 1; min-width: 0; font-size: 12.5px; color: #cfe9ff; }
+  .affix-lock-row.on .al-name { color: #ffd27a; }
+  .save-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
   .shop-item { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 10px; background: var(--panel-2); border: 1px solid rgba(150,130,255,.16); margin-bottom: 6px; }
   .shop-item .si-body { flex: 1; min-width: 0; }
   .shop-item .si-name { font-size: 12.5px; font-weight: 600; }
@@ -860,6 +875,9 @@
         <span class="spacer"></span>
         <span class="tiny hidden" id="storeWarn" style="color:#ffb27a">⚠ 浏览器禁用了本地存储，进度不会被保存</span>
         <span class="tiny muted" id="hubPing">延迟 -- ms</span>
+        <button id="btnExportSave" class="ghost tiny-btn" title="导出本地存档 JSON">导出</button>
+        <button id="btnImportSave" class="ghost tiny-btn" title="从 JSON 导入存档">导入</button>
+        <input type="file" id="importSaveFile" accept="application/json,.json" class="hidden" aria-hidden="true">
         <button id="btnLogout" class="ghost tiny-btn">退出登录</button>
       </div>
 
@@ -977,8 +995,8 @@
             <div id="forgeMsg" class="tiny muted" style="margin-bottom:9px">尚未选中装备。点左侧一件即可强化或重铸。</div>
             <div id="forgeBody"></div>
             <div class="help">
-              强化每级提升该件装备 <b>7%</b> 的全部属性；重铸会保留词条种类、重掷数值。
-              分解装备可获得强化石与重铸石。
+              强化每级提升该件装备 <b>7%</b> 的全部属性；重铸保留词条种类、重掷未锁定数值。
+              每件最多锁定 <b>2</b> 条词条（锁定会提高重铸消耗）。分解装备可获得强化石与重铸石。
             </div>
           </div>
         </div>
@@ -1055,9 +1073,16 @@
           <b>图鉴</b>：按 <span class="key">G</span> 打开图鉴，可切换怪物 / 装备 / 传说。击败怪物或获得装备后解锁条目；未收录的显示为「？？？」。<br><br>
           <b>副本</b>：刷够击杀配额后关底首领出现，击败即通关并解锁更深一层。
           怪物等级越高，掉落装备的物品等级也越高；装备跟不上就会打不动、也扛不住，需要回浅层刷装备。<br><br>
-          <b>装备</b>：7 个部位、5 种品质、随机词条。强化每级 +7% 全属性；重铸保留词条种类重掷数值；
+          <b>装备</b>：7 个部位、5 种品质、随机词条。强化每级 +7% 全属性；重铸可锁定最多 2 条词条后重掷其余；
           分解与出售是背包清理的主要手段。重要装备可点「上锁」防止被分解、出售或批量清理。
-          悬浮任意装备可以看到与当前装备的逐项对比。
+          一键换装与战力评分会按你「下一推进层」的怪物等级加权（深层更看重生存）。
+          悬浮任意装备可以看到与当前装备的逐项对比。<br><br>
+          <b>群系危害</b>：营地践踏潮 · 森林孢子毒雾 · 洞窟碎晶坠落 · 巢穴狂潮 —— 各群系有独立环境机制。<br><br>
+          <b>存档</b>：进度保存在本机浏览器。可用「导出 / 导入」备份 JSON（含本地密码散列，勿公开分享）。
+        </div>
+        <div class="save-actions">
+          <button type="button" class="ghost tiny-btn" id="btnHelpExport">导出存档</button>
+          <button type="button" class="ghost tiny-btn" id="btnHelpImport">导入存档</button>
         </div>
         <div class="help-foot">
           <span class="version-badge"><span class="vb-label">版本</span><span id="helpVersionNum">—</span></span>

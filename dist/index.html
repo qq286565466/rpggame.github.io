@@ -528,6 +528,21 @@
   .forge-row .fr-sub { font-size: 10.5px; color: var(--muted); }
   .forge-work { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .forge-work .help { margin-top: auto; padding-top: 10px; }
+  .affix-lock-box {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    background: rgba(20, 16, 32, .45);
+  }
+  .affix-lock-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.04);
+  }
+  .affix-lock-row:last-child { border-bottom: 0; }
+  .affix-lock-row .al-name { flex: 1; min-width: 0; font-size: 12.5px; color: #cfe9ff; }
+  .affix-lock-row.on .al-name { color: #ffd27a; }
+  .save-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
   .shop-item { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 10px; background: var(--panel-2); border: 1px solid rgba(150,130,255,.16); margin-bottom: 6px; }
   .shop-item .si-body { flex: 1; min-width: 0; }
   .shop-item .si-name { font-size: 12.5px; font-weight: 600; }
@@ -860,6 +875,9 @@
         <span class="spacer"></span>
         <span class="tiny hidden" id="storeWarn" style="color:#ffb27a">⚠ 浏览器禁用了本地存储，进度不会被保存</span>
         <span class="tiny muted" id="hubPing">延迟 -- ms</span>
+        <button id="btnExportSave" class="ghost tiny-btn" title="导出本地存档 JSON">导出</button>
+        <button id="btnImportSave" class="ghost tiny-btn" title="从 JSON 导入存档">导入</button>
+        <input type="file" id="importSaveFile" accept="application/json,.json" class="hidden" aria-hidden="true">
         <button id="btnLogout" class="ghost tiny-btn">退出登录</button>
       </div>
 
@@ -977,8 +995,8 @@
             <div id="forgeMsg" class="tiny muted" style="margin-bottom:9px">尚未选中装备。点左侧一件即可强化或重铸。</div>
             <div id="forgeBody"></div>
             <div class="help">
-              强化每级提升该件装备 <b>7%</b> 的全部属性；重铸会保留词条种类、重掷数值。
-              分解装备可获得强化石与重铸石。
+              强化每级提升该件装备 <b>7%</b> 的全部属性；重铸保留词条种类、重掷未锁定数值。
+              每件最多锁定 <b>2</b> 条词条（锁定会提高重铸消耗）。分解装备可获得强化石与重铸石。
             </div>
           </div>
         </div>
@@ -1055,9 +1073,16 @@
           <b>图鉴</b>：按 <span class="key">G</span> 打开图鉴，可切换怪物 / 装备 / 传说。击败怪物或获得装备后解锁条目；未收录的显示为「？？？」。<br><br>
           <b>副本</b>：刷够击杀配额后关底首领出现，击败即通关并解锁更深一层。
           怪物等级越高，掉落装备的物品等级也越高；装备跟不上就会打不动、也扛不住，需要回浅层刷装备。<br><br>
-          <b>装备</b>：7 个部位、5 种品质、随机词条。强化每级 +7% 全属性；重铸保留词条种类重掷数值；
+          <b>装备</b>：7 个部位、5 种品质、随机词条。强化每级 +7% 全属性；重铸可锁定最多 2 条词条后重掷其余；
           分解与出售是背包清理的主要手段。重要装备可点「上锁」防止被分解、出售或批量清理。
-          悬浮任意装备可以看到与当前装备的逐项对比。
+          一键换装与战力评分会按你「下一推进层」的怪物等级加权（深层更看重生存）。
+          悬浮任意装备可以看到与当前装备的逐项对比。<br><br>
+          <b>群系危害</b>：营地践踏潮 · 森林孢子毒雾 · 洞窟碎晶坠落 · 巢穴狂潮 —— 各群系有独立环境机制。<br><br>
+          <b>存档</b>：进度保存在本机浏览器。可用「导出 / 导入」备份 JSON（含本地密码散列，勿公开分享）。
+        </div>
+        <div class="save-actions">
+          <button type="button" class="ghost tiny-btn" id="btnHelpExport">导出存档</button>
+          <button type="button" class="ghost tiny-btn" id="btnHelpImport">导入存档</button>
         </div>
         <div class="help-foot">
           <span class="version-badge"><span class="vb-label">版本</span><span id="helpVersionNum">—</span></span>
@@ -1304,13 +1329,24 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.8.2';
+  SP.VERSION = '2.9.0';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.9.0',
+      date: '2026-10-09',
+      title: '换装加权 · 群系危害 · 词条锁定 · 存档备份',
+      items: [
+        '一键换装与战力评分按下一推进层怪物等级加权，深层更看重生存属性',
+        '四群系各有环境危害：践踏潮、孢子毒雾、碎晶坠落、巢穴狂潮',
+        '铁匠重铸可锁定最多 2 条词条；锁定会提高重铸消耗',
+        '藏身处与帮助面板支持导出 / 导入本地存档 JSON'
+      ]
+    },
     {
       version: '2.8.2',
       date: '2026-10-09',
@@ -1821,17 +1857,47 @@
     return out;
   }
 
-  /** 综合战力评分，用于排序与「是否更好」的粗判 */
+  /**
+   * 综合战力评分。
+   * targetMlvl 可选：按目标怪物等级加权 —— 深层更看重生命/护甲等生存属性，
+   * 浅层更偏进攻，避免一键换装在高压层穿成玻璃炮。
+   */
   var WEIGHT = {
     atk: 3.2, atkPct: 3.0, hp: 0.35, hpPct: 2.6, armor: 1.1, crit: 3.4, critDmg: 0.55,
     aspd: 2.4, move: 1.6, lifesteal: 5.0, regen: 1.6, thorns: 0.9, pickup: 0.12,
     greed: 0.8, luck: 1.2, skillDmg: 1.1, cdr: 1.3
   };
-  function power(item) {
+  function powerWeights(targetMlvl) {
+    var m = Math.max(0, Number(targetMlvl) || 0);
+    if (!m) return WEIGHT;
+    // mlvl 1→约 0；mlvl 10→约 0.4；mlvl 22+→趋近 1
+    var pressure = Math.max(0, Math.min(1, (m - 4) / 18));
+    return {
+      atk: 3.2 - pressure * 0.7,
+      atkPct: 3.0 - pressure * 0.55,
+      hp: 0.35 + pressure * 0.65,
+      hpPct: 2.6 + pressure * 1.1,
+      armor: 1.1 + pressure * 2.4,
+      crit: 3.4 - pressure * 0.9,
+      critDmg: 0.55 - pressure * 0.12,
+      aspd: 2.4 - pressure * 0.35,
+      move: 1.6 + pressure * 0.35,
+      lifesteal: 5.0 + pressure * 1.4,
+      regen: 1.6 + pressure * 1.2,
+      thorns: 0.9 + pressure * 0.4,
+      pickup: 0.12,
+      greed: 0.8 - pressure * 0.25,
+      luck: 1.2 - pressure * 0.2,
+      skillDmg: 1.1 + pressure * 0.15,
+      cdr: 1.3 + pressure * 0.35
+    };
+  }
+  function power(item, targetMlvl) {
     if (!item) return 0;
+    var W = powerWeights(targetMlvl);
     var s = itemStats(item), total = 0;
-    Object.keys(s).forEach(function (k) { total += (WEIGHT[k] || 0.5) * s[k]; });
-    if (item.unique) total += 40;
+    Object.keys(s).forEach(function (k) { total += (W[k] || 0.5) * s[k]; });
+    if (item.unique) total += 40 + (targetMlvl ? Math.min(18, (Number(targetMlvl) || 0) * 0.4) : 0);
     return Math.round(total);
   }
 
@@ -1862,6 +1928,8 @@
 
   /* --------------------------------------------------------- 强化 / 重铸 / 分解 */
   var UPGRADE_CAP = 12;
+  /** 重铸时可锁定的词条上限（锁住的不重掷数值） */
+  var MAX_AFFIX_LOCKS = 2;
   function upgradeCost(item) {
     var lv = item.upgrade || 0;
     var rarity = RARITY_BY_KEY[item.rarity];
@@ -1873,13 +1941,43 @@
   }
   function canUpgrade(item) { return (item.upgrade || 0) < UPGRADE_CAP; }
 
+  function lockedAffixCount(item) {
+    if (!item || !item.affixes) return 0;
+    var n = 0;
+    for (var i = 0; i < item.affixes.length; i++) if (item.affixes[i].locked) n++;
+    return n;
+  }
+
+  /** 切换单条词条锁定；最多 MAX_AFFIX_LOCKS 条 */
+  function toggleAffixLock(item, index) {
+    if (!item || !item.affixes || !item.affixes.length) {
+      return { ok: false, reason: '这件装备没有词条' };
+    }
+    var af = item.affixes[index];
+    if (!af) return { ok: false, reason: '词条不存在' };
+    if (af.locked) {
+      af.locked = false;
+      return { ok: true, locked: false, item: item, index: index };
+    }
+    if (lockedAffixCount(item) >= MAX_AFFIX_LOCKS) {
+      return { ok: false, reason: '最多锁定 ' + MAX_AFFIX_LOCKS + ' 条词条' };
+    }
+    af.locked = true;
+    return { ok: true, locked: true, item: item, index: index };
+  }
+
   function rerollCost(item) {
     var rarity = RARITY_BY_KEY[item.rarity];
-    return { coins: Math.round((40 + item.ilvl * 9) * (1 + rarity.index * 0.2)), rerolls: 1 };
+    var locks = lockedAffixCount(item);
+    return {
+      coins: Math.round((40 + item.ilvl * 9) * (1 + rarity.index * 0.2) * (1 + locks * 0.35)),
+      rerolls: 1 + locks
+    };
   }
-  /** 重铸：保留词条种类，重新掷数值 */
+  /** 重铸：保留词条种类，重新掷数值；已锁定词条跳过 */
   function reroll(rng, item) {
     item.affixes.forEach(function (af) {
+      if (af.locked) return;
       var def = AFFIX_BY_KEY[af.key];
       if (!def) return;
       var rarity = RARITY_BY_KEY[item.rarity];
@@ -1942,6 +2040,7 @@
     uniquesForSlot: uniquesForSlot,
     pickUnique: pickUnique,
     UPGRADE_CAP: UPGRADE_CAP,
+    MAX_AFFIX_LOCKS: MAX_AFFIX_LOCKS,
     fmt: fmt,
     fmtValue: fmtValue,
     baselineOf: baselineOf,
@@ -1949,11 +2048,14 @@
     weaponProfile: weaponProfile,
     roll: roll,
     itemStats: itemStats,
+    powerWeights: powerWeights,
     power: power,
     aggregate: aggregate,
     equipInto: equipInto,
     upgradeCost: upgradeCost,
     canUpgrade: canUpgrade,
+    lockedAffixCount: lockedAffixCount,
+    toggleAffixLock: toggleAffixLock,
     rerollCost: rerollCost,
     reroll: reroll,
     salvageYield: salvageYield,
@@ -1985,28 +2087,32 @@
       ground: ['#312639', '#261d2c', '#1e1728', '#151021'],
       obstacleKinds: ['tent', 'rock', 'spire'],
       enemies: { melee: 'calf', charger: 'charger', ranged: 'bat', boss: 'alpha' },
-      tier: 1
+      tier: 1,
+      hazard: { key: 'stampede', name: '践踏潮', desc: '冲锋怪更常见，精英出没更频繁' }
     },
     forest: {
       key: 'forest', name: '孢子森林', mlvlBase: 5, arena: 1250,
       ground: ['#1d2b22', '#17231b', '#121b16', '#0d1512'],
       obstacleKinds: ['tree', 'mushroom', 'rock'],
       enemies: { melee: 'sporeling', charger: 'thornbeast', ranged: 'spitter', boss: 'treant' },
-      tier: 2
+      tier: 2,
+      hazard: { key: 'spores', name: '孢子毒雾', desc: '场上持续毒伤；站立不动时伤害加剧' }
     },
     cave: {
       key: 'cave', name: '时空洞窟', mlvlBase: 10, arena: 1200,
       ground: ['#1b2130', '#151a27', '#10141f', '#0b0e16'],
       obstacleKinds: ['crystal', 'stalagmite', 'rock'],
       enemies: { melee: 'crawler', charger: 'gargoyle', ranged: 'shardcaster', boss: 'golem' },
-      tier: 3
+      tier: 3,
+      hazard: { key: 'shatter', name: '碎晶坠落', desc: '周期性碎晶坠落，落地造成范围伤害' }
     },
     nest: {
       key: 'nest', name: '魔兽巢穴', mlvlBase: 16, arena: 1300,
       ground: ['#2c1c24', '#23161d', '#1a1017', '#120a10'],
       obstacleKinds: ['bone', 'egg', 'rock'],
       enemies: { melee: 'broodling', charger: 'ravager', ranged: 'venomwing', boss: 'queen' },
-      tier: 4
+      tier: 4,
+      hazard: { key: 'brood', name: '巢穴狂潮', desc: '刷怪更快，首领召唤更多幼魔' }
     }
   };
   var BIOME_ORDER = ['camp', 'forest', 'cave', 'nest'];
@@ -2274,6 +2380,14 @@
     this.spawnTimer = 1.2;
     // 场上同时存在的怪越多，越逼玩家走位而不是站桩
     this.aliveTarget = 8 + Math.min(12, Math.floor(this.floor / 1.2));
+    this.hazards = [];
+    this.hazardTimer = 2.2;
+    this.sporeTick = 0;
+    // 巢穴狂潮：更多同时在场怪、刷得更快
+    if (this.biome.hazard && this.biome.hazard.key === 'brood') {
+      this.aliveTarget += 3;
+      this.spawnTimer *= 0.72;
+    }
 
     this.shake = 0;
     this.hitStop = 0;
@@ -2388,7 +2502,13 @@
       spawnT: 0.45, anim: this.rng() * TAU,
       slamR: def.slamR, summon: def.summon, summonN: def.summonN, volley: def.volley
     };
-    if (def.boss) { e.slamCd = 3.0; e.summonCd = 8.0; e.volleyCd = 5.5; }
+    if (def.boss) {
+      e.slamCd = 3.0; e.summonCd = 8.0; e.volleyCd = 5.5;
+      if (this.biome.hazard && this.biome.hazard.key === 'brood') {
+        e.summonN = (def.summonN || 3) + 2;
+        e.summonCd = 7.0;
+      }
+    }
     this.enemies.push(e);
     if (def.boss) this.boss = e;
     this.emit('spawn', { key: key, boss: def.boss, elite: elite });
@@ -2398,6 +2518,12 @@
   World.prototype.pickSpawnKey = function () {
     var set = this.biome.enemies;
     var r = this.rng();
+    // 践踏潮：冲锋占比明显提高
+    if (this.biome.hazard && this.biome.hazard.key === 'stampede') {
+      if (r < 0.38) return set.melee;
+      if (r < 0.78) return set.charger;
+      return set.ranged;
+    }
     if (r < 0.58) return set.melee;
     if (r < 0.82) return set.charger;
     return set.ranged;
@@ -2419,11 +2545,72 @@
     }
     this.spawnTimer -= dt;
     if (this.spawnTimer > 0) return;
-    this.spawnTimer = Math.max(0.28, 0.85 - this.floor * 0.03);
+    var baseCd = Math.max(0.28, 0.85 - this.floor * 0.03);
+    if (this.biome.hazard && this.biome.hazard.key === 'brood') baseCd *= 0.72;
+    this.spawnTimer = baseCd;
     var batch = alive < this.aliveTarget ? 2 : 1;
+    var eliteRate = 0.06 + 0.02 * this.tier;
+    if (this.biome.hazard && this.biome.hazard.key === 'stampede') eliteRate += 0.05;
     for (var b = 0; b < batch; b++) {
-      var elite = this.rng() < (0.06 + 0.02 * this.tier);
+      var elite = this.rng() < eliteRate;
       this.spawnEnemy(this.pickSpawnKey(), { elite: elite });
+    }
+  };
+
+  /** 群系环境危害：毒雾 / 碎晶坠落等 */
+  World.prototype.updateHazards = function (dt) {
+    var haz = this.biome && this.biome.hazard;
+    if (!haz || this.dead || this.cleared) return;
+    var p = this.player;
+    var i;
+
+    if (haz.key === 'spores') {
+      this.sporeTick += dt;
+      if (this.sporeTick >= 0.55) {
+        this.sporeTick = 0;
+        var moving = SP.len(p.vx, p.vy) > 55;
+        var dps = (2.2 + this.mlvl * 0.55) * (moving ? 0.32 : 1);
+        this.hurtPlayer(dps * 0.55, p.x, p.y, { soft: true });
+        if (!moving) {
+          this.fx.push({
+            t: 'p', x: p.x + this.rng.range(-18, 18), y: p.y + this.rng.range(-18, 18),
+            vx: this.rng.range(-20, 20), vy: this.rng.range(-40, -10),
+            dur: 0.5, life: 0.5, color: '#7dce86', size: 3.2
+          });
+        }
+      }
+    }
+
+    if (haz.key === 'shatter') {
+      this.hazardTimer -= dt;
+      if (this.hazardTimer <= 0) {
+        this.hazardTimer = Math.max(1.35, 3.1 - this.floor * 0.06);
+        var a = this.rng() * TAU;
+        var rad = this.rng.range(30, 240);
+        var hx = clamp(p.x + Math.cos(a) * rad, -this.arena + 40, this.arena - 40);
+        var hy = clamp(p.y + Math.sin(a) * rad, -this.arena + 40, this.arena - 40);
+        this.hazards.push({
+          kind: 'crystal',
+          x: hx, y: hy,
+          r: 62 + this.mlvl * 1.2,
+          life: 0.95,
+          tele: 0.95,
+          dmg: (9 + this.mlvl * 1.8) * this.scaling().dmg
+        });
+      }
+    }
+
+    for (i = this.hazards.length - 1; i >= 0; i--) {
+      var hz = this.hazards[i];
+      hz.life -= dt;
+      if (hz.life > 0) continue;
+      this.ring(hz.x, hz.y, 10, hz.r, 0.35, '#7eb6e8', 5);
+      this.burst(hz.x, hz.y, 14, '#a8e0ff', 160, 0.4, 2.8);
+      this.shake = Math.max(this.shake, 5);
+      if (dist(hz.x, hz.y, p.x, p.y) < hz.r + p.r) {
+        this.hurtPlayer(hz.dmg, hz.x, hz.y);
+      }
+      this.hazards.splice(i, 1);
     }
   };
 
@@ -2582,35 +2769,45 @@
   };
 
   /* ------------------------------------------------------------- 玩家受伤 */
-  World.prototype.hurtPlayer = function (amount, srcX, srcY) {
+  /**
+   * opts.soft：环境持续伤害（毒雾等），不触发无敌帧与大硬直，仍受护甲与护盾减免。
+   */
+  World.prototype.hurtPlayer = function (amount, srcX, srcY, opts) {
+    opts = opts || {};
+    var soft = !!opts.soft;
     var p = this.player;
-    if (this.dead || p.invuln > 0) return 0;
+    if (this.dead) return 0;
+    if (!soft && p.invuln > 0) return 0;
     var reduced = amount * (1 - armorReduction(p.armor, this.mlvl));
     if (p.shield > 0) {
       var absorbed = Math.min(p.shield, reduced);
       p.shield -= absorbed;
       reduced -= absorbed;
-      this.addText(p.x, p.y - 34, '护盾 -' + Math.round(absorbed), '#8fd8ff', 13);
+      if (!soft) this.addText(p.x, p.y - 34, '护盾 -' + Math.round(absorbed), '#8fd8ff', 13);
     }
     if (reduced > 0) {
       p.hp -= reduced;
       this.stats_damageTaken += reduced;
-      this.addText(p.x, p.y - 26, '-' + Math.round(reduced), '#ff6b6b', 17);
+      this.addText(p.x, p.y - 26, (soft ? '毒 ' : '-') + Math.round(reduced), soft ? '#9dffb0' : '#ff6b6b', soft ? 13 : 17);
     }
-    p.invuln = 0.62;
-    p.hurtFlash = 0.3;
-    this.shake = Math.max(this.shake, 8);
-    this.hitStop = 0.05;
-    this.burst(p.x, p.y, 8, '#ff5c5c', 160, 0.35, 3);
-    this.emit('hurt', { amount: reduced });
-    if (this.hasUnique('swift')) p.speedBuffT = 2.5;
-    if (p.thorns > 0) {
-      for (var i = 0; i < this.enemies.length; i++) {
-        var e = this.enemies[i];
-        if (e.dying > 0) continue;
-        if (SP.dist(e.x, e.y, p.x, p.y) < e.r + p.r + 34) this.damageEnemy(e, p.thorns, {});
+    if (!soft) {
+      p.invuln = 0.62;
+      p.hurtFlash = 0.3;
+      this.shake = Math.max(this.shake, 8);
+      this.hitStop = 0.05;
+      this.burst(p.x, p.y, 8, '#ff5c5c', 160, 0.35, 3);
+      if (this.hasUnique('swift')) p.speedBuffT = 2.5;
+      if (p.thorns > 0) {
+        for (var i = 0; i < this.enemies.length; i++) {
+          var e = this.enemies[i];
+          if (e.dying > 0) continue;
+          if (SP.dist(e.x, e.y, p.x, p.y) < e.r + p.r + 34) this.damageEnemy(e, p.thorns, {});
+        }
       }
+    } else {
+      p.hurtFlash = Math.max(p.hurtFlash, 0.1);
     }
+    this.emit('hurt', { amount: reduced, soft: soft });
     if (p.hp <= 0) this.die();
     return reduced;
   };
@@ -2921,6 +3118,7 @@
     this.updatePlayer(dt, input);
     this.updateEnemies(dt);
     this.updateProjectiles(dt);
+    this.updateHazards(dt);
     this.updatePickups(dt);
     this.updateVisuals(dt);
 
@@ -3600,13 +3798,34 @@
   /** 部位对应的实际装备槽（戒指是一对二） */
   function slotGroup(slot) { return slot === 'ring' ? ['ring1', 'ring2'] : [slot]; }
 
+  /**
+   * 角色当前可推进的最高怪物等级（各已解锁群系「下一层」的 mlvl 取最大）。
+   * 用于一键换装 / 战力排序按目标层加权。
+   */
+  function targetMlvl(ch) {
+    var best = 1;
+    if (!ch || !SP.BIOMES) return best;
+    unlockedBiomes(ch).forEach(function (b) {
+      var biome = SP.BIOMES[b];
+      if (!biome) return;
+      var mlvl = biome.mlvlBase + (maxFloor(ch, b) - 1);
+      if (mlvl > best) best = mlvl;
+    });
+    return best;
+  }
+
+  function scoreItem(it, mlvl) {
+    return I.power(it, mlvl);
+  }
+
   /** 读取某类部位当前装备：戒指取两槽中战力较高的那件（用于界面展示与比较） */
-  function currentInSlot(ch, slot) {
+  function currentInSlot(ch, slot, mlvl) {
     var group = slotGroup(slot), best = null;
+    var target = mlvl === undefined ? targetMlvl(ch) : mlvl;
     for (var i = 0; i < group.length; i++) {
       var it = ch.equipped[group[i]];
       if (!it) continue;
-      if (!best || I.power(it) > I.power(best)) best = it;
+      if (!best || scoreItem(it, target) > scoreItem(best, target)) best = it;
     }
     return best;
   }
@@ -3615,14 +3834,17 @@
    * 一键换装：把背包里该部位最强的一件穿上。
    * 目标槽位优先取空槽，否则替换战力最低的槽（戒指两槽独立判定），
    * 被替换下来的装备一定回到背包，不会凭空消失。
+   * opts.targetMlvl 可覆盖默认的「下一推进层」评分基准。
    */
-  function autoEquipBest(ch, slot) {
+  function autoEquipBest(ch, slot, opts) {
+    opts = opts || {};
+    var mlvl = opts.targetMlvl !== undefined ? opts.targetMlvl : targetMlvl(ch);
     var group = slotGroup(slot);
     var best = null, bestIdx = -1;
     for (var i = 0; i < ch.inventory.length; i++) {
       var it = ch.inventory[i];
       if (it.slot !== slot) continue;
-      if (!best || I.power(it) > I.power(best)) { best = it; bestIdx = i; }
+      if (!best || scoreItem(it, mlvl) > scoreItem(best, mlvl)) { best = it; bestIdx = i; }
     }
     if (!best) return { ok: false, reason: '背包里没有该部位的装备' };
 
@@ -3634,10 +3856,10 @@
       var weakestSlot = null, weakestPower = Infinity;
       for (g = 0; g < group.length; g++) {
         var cur = ch.equipped[group[g]];
-        var pw = I.power(cur);
+        var pw = scoreItem(cur, mlvl);
         if (pw < weakestPower) { weakestPower = pw; weakestSlot = group[g]; }
       }
-      if (I.power(best) <= weakestPower) return { ok: false, reason: '当前装备已经更好' };
+      if (scoreItem(best, mlvl) <= weakestPower) return { ok: false, reason: '当前装备已经更好' };
       target = weakestSlot;
     }
 
@@ -3645,7 +3867,7 @@
     var prev = ch.equipped[target] || null;
     ch.equipped[target] = best;
     if (prev && prev.uid !== best.uid) ch.inventory.push(prev);
-    return { ok: true, item: best, replaced: prev, slot: target };
+    return { ok: true, item: best, replaced: prev, slot: target, targetMlvl: mlvl };
   }
 
   /* --------------------------------------------------- 强化 / 重铸 / 分解 / 出售 */
@@ -3668,15 +3890,25 @@
     if (!found) return { ok: false, reason: '找不到该装备' };
     var item = found.item;
     if (!item.affixes.length) return { ok: false, reason: '这件装备没有词条可重铸' };
+    var unlocked = item.affixes.filter(function (a) { return !a.locked; });
+    if (!unlocked.length) return { ok: false, reason: '所有词条都已锁定，无需重铸' };
     var cost = I.rerollCost(item);
     if (ch.coins < cost.coins) return { ok: false, reason: 'pig-coin 不足（需要 ' + cost.coins + '）' };
     if (ch.materials.re < cost.rerolls) return { ok: false, reason: '重铸石不足（需要 ' + cost.rerolls + '）' };
-    var before = I.power(item);
+    var mlvl = targetMlvl(ch);
+    var before = I.power(item, mlvl);
     ch.coins -= cost.coins;
     ch.materials.re -= cost.rerolls;
     I.reroll(SP.makeRng((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0), item);
-    var after = I.power(item);
+    var after = I.power(item, mlvl);
     return { ok: true, item: item, before: before, after: after, cost: cost };
+  }
+
+  /** 锁定 / 解锁装备上的一条词条（重铸时跳过已锁词条） */
+  function toggleAffixLock(ch, uid, index) {
+    var found = findItem(ch, uid);
+    if (!found) return { ok: false, reason: '找不到该装备' };
+    return I.toggleAffixLock(found.item, index);
   }
 
   /** 分解为材料；已装备的需先卸下；上锁装备不可分解 */
@@ -3719,12 +3951,14 @@
   }
 
   /** 批量分解所有「未装备且战力低于阈值」的装备（背包清理）；跳过上锁 */
-  function salvageBelow(ch, keepPower) {
+  function salvageBelow(ch, keepPower, opts) {
+    opts = opts || {};
+    var mlvl = opts.targetMlvl !== undefined ? opts.targetMlvl : targetMlvl(ch);
     var removed = 0, stones = 0, rerolls = 0, skippedLocked = 0;
     for (var i = ch.inventory.length - 1; i >= 0; i--) {
       var it = ch.inventory[i];
       if (it.locked) { skippedLocked++; continue; }
-      if (I.power(it) > keepPower) continue;
+      if (scoreItem(it, mlvl) > keepPower) continue;
       var y = I.salvageYield(it);
       stones += y.stones; rerolls += y.rerolls;
       ch.inventory.splice(i, 1);
@@ -3905,6 +4139,16 @@
   function normalizeItemFlags(it) {
     if (!it) return;
     it.locked = !!it.locked;
+    if (!Array.isArray(it.affixes)) return;
+    var locks = 0;
+    it.affixes.forEach(function (af) {
+      if (!af || typeof af !== 'object') return;
+      af.locked = !!af.locked;
+      if (af.locked) {
+        locks++;
+        if (locks > I.MAX_AFFIX_LOCKS) af.locked = false;
+      }
+    });
   }
 
   function validItem(it) {
@@ -3929,9 +4173,12 @@
     unequip: unequip,
     autoEquipBest: autoEquipBest,
     currentInSlot: currentInSlot,
+    targetMlvl: targetMlvl,
+    scoreItem: scoreItem,
     slotGroup: slotGroup,
     upgradeItem: upgradeItem,
     rerollItem: rerollItem,
+    toggleAffixLock: toggleAffixLock,
     salvage: salvage,
     sell: sell,
     toggleLock: toggleLock,
@@ -4628,6 +4875,42 @@
       ctx.globalAlpha = 1;
       ctx.fillStyle = '#e9dcff';
       ctx.beginPath(); ctx.arc(pp.x, pp.y, pr.r * 0.6, 0, TAU); ctx.fill();
+    }
+
+    /* ---------------------------------------------------------- 群系危害预警 */
+    if (world.hazards && world.hazards.length) {
+      for (var hi = 0; hi < world.hazards.length; hi++) {
+        var hz = world.hazards[hi];
+        var hp = S(hz.x, hz.y);
+        var ratio = hz.tele ? Math.max(0.15, hz.life / hz.tele) : 0.5;
+        ctx.save();
+        ctx.globalAlpha = 0.22 + (1 - ratio) * 0.35;
+        ctx.strokeStyle = '#9fd8ff';
+        ctx.fillStyle = 'rgba(126,182,232,' + (0.12 + (1 - ratio) * 0.22) + ')';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 5]);
+        ctx.beginPath();
+        ctx.arc(hp.x, hp.y, hz.r, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(210,240,255,' + (0.35 + (1 - ratio) * 0.5) + ')';
+        ctx.beginPath();
+        ctx.moveTo(hp.x, hp.y - 10 - (1 - ratio) * 28);
+        ctx.lineTo(hp.x + 7, hp.y - 2);
+        ctx.lineTo(hp.x - 7, hp.y - 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+    // 孢子毒雾氛围：极淡的绿色呼吸罩
+    if (world.biome && world.biome.hazard && world.biome.hazard.key === 'spores') {
+      var pulse = 0.04 + Math.sin(this.t * 2.1) * 0.02;
+      ctx.save();
+      ctx.fillStyle = 'rgba(90,160,100,' + pulse + ')';
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
     }
 
     /* ---------------------------------------------------------- 怪物 */
@@ -6229,7 +6512,57 @@
 
     logout: function () { this.forget(); this.current = null; },
     char: function () { return this.current ? this.current.character : null; },
-    persist: function () { if (this.current && !this.current.guest) this.save(); }
+    persist: function () { if (this.current && !this.current.guest) this.save(); },
+
+    /** 导出全部本地账号存档为 JSON 文本（含密码散列，勿公开分享） */
+    exportBackup: function () {
+      return JSON.stringify({
+        v: 2,
+        game: 'space-time-pig',
+        exportedAt: Date.now(),
+        users: this.users
+      }, null, 2);
+    },
+
+    /**
+     * 导入备份：按用户名合并；同名账号会被覆盖。
+     * 返回 { ok, msg, imported }
+     */
+    importBackup: function (raw) {
+      var parsed;
+      try { parsed = typeof raw === 'string' ? JSON.parse(raw) : raw; }
+      catch (e) { return { ok: false, msg: '存档不是合法 JSON' }; }
+      if (!parsed || typeof parsed !== 'object' || !parsed.users || typeof parsed.users !== 'object') {
+        return { ok: false, msg: '存档格式无效（缺少 users）' };
+      }
+      var keys = Object.keys(parsed.users);
+      if (!keys.length) return { ok: false, msg: '存档里没有账号' };
+      var imported = 0;
+      for (var i = 0; i < keys.length; i++) {
+        var k = String(keys[i]).toLowerCase();
+        var src = parsed.users[keys[i]];
+        if (!src || typeof src !== 'object') continue;
+        var rec = {
+          name: src.name || k,
+          hash: src.hash || '',
+          created: src.created || Date.now(),
+          guest: false,
+          character: P.normalize(src.character || {})
+        };
+        this.users[k] = rec;
+        imported++;
+      }
+      if (!imported) return { ok: false, msg: '没有可导入的账号' };
+      this.save();
+      if (this.current && !this.current.guest) {
+        var curKey = String(this.current.name || '').toLowerCase();
+        if (this.users[curKey]) {
+          this.current = this.users[curKey];
+          this.current.character = P.normalize(this.current.character);
+        }
+      }
+      return { ok: true, msg: '已导入 ' + imported + ' 个账号', imported: imported };
+    }
   };
 
   /* ==================================================================== UI */
@@ -6296,12 +6629,67 @@
     ['inUser', 'inPass'].forEach(function (id) {
       $(id).addEventListener('keydown', function (ev) { if (ev.key === 'Enter') self.submitAuth(); });
     });
+    $('#btnExportSave').addEventListener('click', function () { self.exportSave(); });
+    $('#btnImportSave').addEventListener('click', function () {
+      var inp = self.$('importSaveFile');
+      if (inp) inp.click();
+    });
+    $('#importSaveFile').addEventListener('change', function () {
+      var file = this.files && this.files[0];
+      this.value = '';
+      if (!file) return;
+      var reader = new global.FileReader();
+      reader.onload = function () {
+        var r = Accounts.importBackup(String(reader.result || ''));
+        if (!r.ok) return self.flash(r.msg);
+        self.flash(r.msg, true);
+        if (Accounts.current) {
+          self.renderHideoutHUD();
+          self.refreshPanel();
+        }
+      };
+      reader.onerror = function () { self.flash('读取文件失败'); };
+      reader.readAsText(file);
+    });
+    $('#btnHelpExport').addEventListener('click', function () { self.exportSave(); });
+    $('#btnHelpImport').addEventListener('click', function () {
+      var inp = self.$('importSaveFile');
+      if (inp) inp.click();
+    });
     $('#btnLogout').addEventListener('click', function () {
       Accounts.logout();
       self.closeAllPanels();
       self.showLogin();
       self.setMsg('已退出登录。', true);
     });
+    var bindExport = function () { self.exportSave(); };
+    var bindImport = function () {
+      var inp = self.$('importSaveFile');
+      if (inp) inp.click();
+    };
+    if ($('#btnExportSave')) $('#btnExportSave').addEventListener('click', bindExport);
+    if ($('#btnImportSave')) $('#btnImportSave').addEventListener('click', bindImport);
+    if ($('#btnHelpExport')) $('#btnHelpExport').addEventListener('click', bindExport);
+    if ($('#btnHelpImport')) $('#btnHelpImport').addEventListener('click', bindImport);
+    if ($('#importSaveFile')) {
+      $('#importSaveFile').addEventListener('change', function () {
+        var file = this.files && this.files[0];
+        this.value = '';
+        if (!file) return;
+        var reader = new global.FileReader();
+        reader.onload = function () {
+          var r = Accounts.importBackup(String(reader.result || ''));
+          if (!r.ok) return self.flash(r.msg);
+          self.flash(r.msg, true);
+          if (Accounts.current) {
+            self.renderHideoutHUD();
+            self.refreshPanel();
+          }
+        };
+        reader.onerror = function () { self.flash('读取文件失败'); };
+        reader.readAsText(file);
+      });
+    }
     $('#btnLoginChangelog').addEventListener('click', function () { self.openPanel('changelog'); });
     $('#btnHelpChangelog').addEventListener('click', function () { self.openPanel('changelog'); });
 
@@ -6632,7 +7020,7 @@
         '<div class="es-kicker">' + SLOT_LABEL[slot] + '</div>' +
         '<div class="es-icon"' + (rar ? ' style="border-color:' + rar.color + ';color:' + rar.color + '"' : '') + '>' +
         self.iconHtml(it || slot) + '</div>' +
-        '<div class="es-sub">' + (it ? I.power(it) : '空') + '</div>';
+        '<div class="es-sub">' + (it ? self.itemPower(it) : '空') + '</div>';
       if (it) {
         self.bindItemTooltip(row, it, slot);
         row.addEventListener('click', function (ev) {
@@ -6737,13 +7125,38 @@
     if (it.slot === 'ring') {
       var a = ch.equipped.ring1, b = ch.equipped.ring2;
       if (!a || !b) return true;
-      return I.power(it) > Math.min(I.power(a), I.power(b));
+      return this.itemPower(it) > Math.min(this.itemPower(a), this.itemPower(b));
     }
     var cur = ch.equipped[it.slot];
-    return !cur || I.power(it) > I.power(cur);
+    return !cur || this.itemPower(it) > this.itemPower(cur);
   };
 
   /** 与当前装备比较（戒指比两槽中较弱的那件，才是真实收益） */
+  /** 按角色下一推进层加权的战力 */
+  UI.prototype.itemPower = function (item) {
+    var ch = Accounts.char();
+    return I.power(item, ch ? P.targetMlvl(ch) : undefined);
+  };
+
+  UI.prototype.exportSave = function () {
+    try {
+      var text = Accounts.exportBackup();
+      var blob = new global.Blob([text], { type: 'application/json' });
+      var url = global.URL.createObjectURL(blob);
+      var a = doc.createElement('a');
+      var stamp = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = '时空猪-存档-' + stamp + '.json';
+      doc.body.appendChild(a);
+      a.click();
+      doc.body.removeChild(a);
+      global.URL.revokeObjectURL(url);
+      this.flash('存档已导出（含本地密码散列，请勿公开分享）', true);
+    } catch (e) {
+      this.flash('导出失败：' + (e && e.message ? e.message : '未知错误'));
+    }
+  };
+
   UI.prototype.compareTarget = function (item) {
     var ch = Accounts.char();
     if (!ch) return null;
@@ -6751,7 +7164,7 @@
       var a = ch.equipped.ring1, b = ch.equipped.ring2;
       if (!a) return b;
       if (!b) return a;
-      return I.power(a) <= I.power(b) ? a : b;
+      return this.itemPower(a) <= this.itemPower(b) ? a : b;
     }
     return ch.equipped[item.slot] || null;
   };
@@ -6802,10 +7215,10 @@
       return self.bagFilter === 'all' || it.slot === self.bagFilter;
     });
     var sorters = {
-      power: function (a, b) { return I.power(b) - I.power(a); },
-      ilvl: function (a, b) { return b.ilvl - a.ilvl || I.power(b) - I.power(a); },
+      power: function (a, b) { return self.itemPower(b) - self.itemPower(a); },
+      ilvl: function (a, b) { return b.ilvl - a.ilvl || self.itemPower(b) - self.itemPower(a); },
       rarity: function (a, b) {
-        return I.RARITY_BY_KEY[b.rarity].index - I.RARITY_BY_KEY[a.rarity].index || I.power(b) - I.power(a);
+        return I.RARITY_BY_KEY[b.rarity].index - I.RARITY_BY_KEY[a.rarity].index || self.itemPower(b) - self.itemPower(a);
       }
     };
     list.sort(sorters[this.bagSort] || sorters.power);
@@ -6984,7 +7397,7 @@
     var rar = I.RARITY_BY_KEY[it.rarity];
     this.$('selName').className = 'tiny';
     this.$('selName').innerHTML = '<span style="color:' + rar.color + '">' + esc(it.name) +
-      (it.upgrade ? ' +' + it.upgrade : '') + '</span> <span class="muted">· 战力 ' + I.power(it) + '</span>' +
+      (it.upgrade ? ' +' + it.upgrade : '') + '</span> <span class="muted">· 战力 ' + this.itemPower(it) + '</span>' +
       (it.locked ? ' <span style="color:#ffd27a">· 已上锁</span>' : '');
     var inBag = found.where === 'inventory';
     this.$('actEquip').classList.toggle('hidden', !inBag);
@@ -7048,7 +7461,9 @@
     if (item.affixes.length) {
       html += '<div class="tt-sec">';
       item.affixes.forEach(function (a) {
-        html += '<div class="tt-line"><span style="color:#9fd8ff">' + I.STAT_META[a.key].name + '</span><b style="color:#cfe9ff">' +
+        html += '<div class="tt-line"><span style="color:#9fd8ff">' + I.STAT_META[a.key].name +
+          (a.locked ? ' <span style="color:#ffd27a">锁</span>' : '') +
+          '</span><b style="color:#cfe9ff">' +
           I.fmtValue(a.key, a.value * I.upgradeMult(item)) + '</b></div>';
       });
       html += '</div>';
@@ -7062,7 +7477,7 @@
     if (!isEquipped && target) {
       var diff = I.compare(target, item);
       var keys = Object.keys(diff);
-      var better = I.power(item) - I.power(target);
+      var better = this.itemPower(item) - this.itemPower(target);
       html += '<div class="tt-sec"><div class="tt-line"><span>对比当前装备</span><b class="' +
         (better >= 0 ? 'tt-up' : 'tt-down') + '">' + (better >= 0 ? '+' : '') + better + ' 战力</b></div>';
       keys.slice(0, 7).forEach(function (k) {
@@ -7084,7 +7499,8 @@
     } else if (item.locked) {
       html += '<div class="tt-foot" style="color:#ffd27a">已上锁：卸下后也无法被分解/出售</div>';
     }
-    html += '<div class="tt-foot">战力评分 ' + I.power(item) + '</div>';
+    html += '<div class="tt-foot">战力评分 ' + this.itemPower(item) +
+      ' <span class="muted">（按下一推进层加权）</span></div>';
 
     tip.innerHTML = html;
     tip.classList.remove('hidden');
@@ -7136,6 +7552,13 @@
     this.sound && this.sound.play('click');
     this.afterChange(r.locked ? '已上锁，不会被分解或出售' : '已解锁');
   };
+  UI.prototype.actionToggleAffixLock = function (index) {
+    var ch = Accounts.char();
+    var r = P.toggleAffixLock(ch, this.selUid, index);
+    if (!r.ok) return this.flash(r.reason);
+    this.sound && this.sound.play('click');
+    this.afterChange(r.locked ? '已锁定该词条，重铸时保留数值' : '已解锁该词条');
+  };
   UI.prototype.actionSalvage = function () {
     var ch = Accounts.char();
     var r = P.salvage(ch, this.selUid);
@@ -7164,14 +7587,15 @@
       }
     });
     if (!changed) return this.flash('没有找到更强的装备');
-    this.afterChange('已自动换上 ' + changed + ' 件更强的装备');
+    this.afterChange('已自动换上 ' + changed + ' 件（按下一推进层 mlvl ' + P.targetMlvl(ch) + ' 加权）');
   };
 
   UI.prototype.salvageJunk = function () {
     var ch = Accounts.char();
+    var self = this;
     var threshold = 0;
     I.EQUIP_SLOTS.forEach(function (s) {
-      if (ch.equipped[s]) threshold = Math.max(threshold, I.power(ch.equipped[s]) * 0.8);
+      if (ch.equipped[s]) threshold = Math.max(threshold, self.itemPower(ch.equipped[s]) * 0.8);
     });
     if (threshold <= 0) return this.flash('请先装备一些物品，再按战力清理背包');
     var r = P.salvageBelow(ch, threshold);
@@ -7223,7 +7647,7 @@
       var it = ch.equipped[slot];
       if (it) rows.push({ item: it, where: 'equipped', slotName: I.SLOT_META[slot].name });
     });
-    ch.inventory.slice().sort(function (a, b) { return I.power(b) - I.power(a); }).forEach(function (it) {
+    ch.inventory.slice().sort(function (a, b) { return self.itemPower(b) - self.itemPower(a); }).forEach(function (it) {
       rows.push({ item: it, where: 'inventory', slotName: I.SLOT_META[it.slot].name });
     });
     if (!rows.length) {
@@ -7243,7 +7667,7 @@
         (it.locked ? ' <span style="color:#ffd27a;font-size:12px">锁</span>' : '') + '</div>' +
         '<div class="fr-sub">' + (row.where === 'equipped' ? '已装备 · ' : '') +
         (it.locked ? '已上锁 · ' : '') +
-        row.slotName + ' · ilvl ' + it.ilvl + ' · 战力 ' + I.power(it) + '</div></div>';
+        row.slotName + ' · ilvl ' + it.ilvl + ' · 战力 ' + self.itemPower(it) + '</div></div>';
       node.addEventListener('click', function (ev) {
         ev.stopPropagation();
         self.selUid = it.uid;
@@ -7266,7 +7690,7 @@
       var card = el('div', 'shop-item');
       card.innerHTML = '<div class="si-body">' +
         '<div class="si-name" style="color:' + rar.color + '">' + esc(it.name) + (it.upgrade ? ' +' + it.upgrade : '') + '</div>' +
-        '<div class="si-desc">' + rar.name + ' · ilvl ' + it.ilvl + ' · 战力 ' + I.power(it) + ' · 词条 ' + it.affixes.length + ' 条</div>' +
+        '<div class="si-desc">' + rar.name + ' · ilvl ' + it.ilvl + ' · 战力 ' + self.itemPower(it) + ' · 词条 ' + it.affixes.length + ' 条</div>' +
         '</div>';
       body.appendChild(card);
       this.$('forgeMsg').textContent = '';
@@ -7282,12 +7706,33 @@
       upRow.appendChild(upBtn);
       body.appendChild(upRow);
 
+      if (it.affixes.length) {
+        var lockBox = el('div', 'affix-lock-box');
+        lockBox.innerHTML = '<div class="si-name" style="margin-bottom:6px">词条锁定 <span class="tiny muted">最多 ' +
+          I.MAX_AFFIX_LOCKS + ' 条 · 已锁 ' + I.lockedAffixCount(it) + '</span></div>';
+        it.affixes.forEach(function (af, idx) {
+          var row = el('div', 'affix-lock-row' + (af.locked ? ' on' : ''));
+          var meta = I.STAT_META[af.key] || { name: af.key };
+          row.innerHTML = '<span class="al-name">' + esc(meta.name) + ' ' +
+            I.fmtValue(af.key, af.value * I.upgradeMult(it)) + '</span>';
+          var btn = el('button', 'tiny-btn' + (af.locked ? ' gold' : ''), af.locked ? '解锁' : '锁定');
+          btn.addEventListener('click', function () { self.actionToggleAffixLock(idx); });
+          row.appendChild(btn);
+          lockBox.appendChild(row);
+        });
+        body.appendChild(lockBox);
+      }
+
       var reCost = I.rerollCost(it);
+      var lockedN = I.lockedAffixCount(it);
+      var freeN = it.affixes.length - lockedN;
       var reRow = el('div', 'shop-item');
       reRow.innerHTML = '<div class="si-body"><div class="si-name">重铸词条</div>' +
-        '<div class="si-desc">保留种类、重掷数值 ｜ 消耗 ' + reCost.coins + ' 金币 + ' + reCost.rerolls + ' 重铸石</div></div>';
+        '<div class="si-desc">保留种类、重掷未锁数值' +
+        (lockedN ? '（跳过 ' + lockedN + ' 条已锁）' : '') +
+        ' ｜ 消耗 ' + reCost.coins + ' 金币 + ' + reCost.rerolls + ' 重铸石</div></div>';
       var reBtn = el('button', 'tiny-btn', '重铸');
-      reBtn.disabled = !it.affixes.length || ch.coins < reCost.coins || ch.materials.re < reCost.rerolls;
+      reBtn.disabled = !it.affixes.length || freeN <= 0 || ch.coins < reCost.coins || ch.materials.re < reCost.rerolls;
       reBtn.addEventListener('click', function () { self.actionReroll(); });
       reRow.appendChild(reBtn);
       body.appendChild(reRow);
@@ -7444,6 +7889,9 @@
         '<span class="bi-flag' + (pick > cleared ? '' : ' hidden') + '" id="ff-' + key + '">新层</span>' +
         '<div class="bi-mlvl" id="fm-' + key + '">怪物等级 ' + mlvl + '</div></div></div>' +
         '<div class="bi-sub">首领 · ' + esc(bossName) + ' · 已通关 ' + cleared + ' 层</div>' +
+        (b.hazard
+          ? '<div class="bi-sub" style="color:#ffd08a">危害 · ' + esc(b.hazard.name) + '：' + esc(b.hazard.desc) + '</div>'
+          : '') +
         '</div></div>';
 
       if (maxF > 1) {
@@ -7967,13 +8415,13 @@
     if (!summary.loot.length) {
       list.appendChild(el('div', 'tiny muted', '这一趟没有拾取到装备。'));
     } else {
-      summary.loot.slice().sort(function (a, b) { return I.power(b) - I.power(a); }).forEach(function (it) {
+      summary.loot.slice().sort(function (a, b) { return self.itemPower(b) - self.itemPower(a); }).forEach(function (it) {
         var rar = I.RARITY_BY_KEY[it.rarity];
         var line = el('div', 'loot-line');
         line.innerHTML = '<div class="ll-slot" style="border-color:' + rar.color + ';color:' + rar.color + '">' +
           self.iconHtml(it) + '</div>' +
           '<div class="ll-name" style="color:' + rar.color + '">' + esc(it.name) + (it.upgrade ? ' +' + it.upgrade : '') + '</div>' +
-          '<div class="ll-pow">ilvl ' + it.ilvl + ' · 战力 ' + I.power(it) + '</div>';
+          '<div class="ll-pow">ilvl ' + it.ilvl + ' · 战力 ' + self.itemPower(it) + '</div>';
         list.appendChild(line);
       });
     }

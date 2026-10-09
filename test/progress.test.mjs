@@ -303,6 +303,62 @@ test('normalize 将 locked 规范为布尔值', () => {
   assert.equal(ch.equipped.weapon.locked, true);
 });
 
+test('targetMlvl 随解锁进度上升', () => {
+  const ch = P.newCharacter();
+  assert.equal(P.targetMlvl(ch), SP.BIOMES.camp.mlvlBase);
+  ch.progress.camp = 3;
+  assert.ok(P.targetMlvl(ch) >= SP.BIOMES.forest.mlvlBase);
+});
+
+test('一键换装可按目标层偏好生存装', () => {
+  const ch = P.newCharacter();
+  ch.progress = { camp: 20, forest: 20, cave: 20, nest: 10 };
+  const glass = {
+    uid: 'glass', slot: 'armor', rarity: 'rare', ilvl: 30, upgrade: 0, unique: null, locked: false,
+    stats: { atk: 50, crit: 10 }, affixes: [], name: '玻璃甲', base: 'vest', baseName: '旅者皮甲'
+  };
+  const tank = {
+    uid: 'tank', slot: 'armor', rarity: 'rare', ilvl: 30, upgrade: 0, unique: null, locked: false,
+    stats: { hp: 200, armor: 55 }, affixes: [], name: '重甲', base: 'plate', baseName: '科多兽重铠'
+  };
+  ch.equipped.armor = glass;
+  ch.inventory.push(tank);
+  const deep = P.targetMlvl(ch);
+  assert.ok(I.power(tank, deep) > I.power(glass, deep), '深层坦克分应更高');
+  const r = P.autoEquipBest(ch, 'armor');
+  assert.equal(r.ok, true);
+  assert.equal(ch.equipped.armor.uid, 'tank');
+});
+
+test('词条锁定经 Progress 切换，全锁时不可重铸', () => {
+  const ch = richChar();
+  let it = null;
+  for (let i = 0; i < 400 && !it; i++) {
+    const c = I.roll(SP.makeRng(900 + i), { ilvl: 30, slot: 'weapon', rarityBias: 3 });
+    if (c.affixes.length >= 2) it = c;
+  }
+  assert.ok(it, '应抽到至少 2 词条装备');
+  ch.inventory.push(it);
+  assert.equal(P.toggleAffixLock(ch, it.uid, 0).ok, true);
+  assert.equal(P.toggleAffixLock(ch, it.uid, 1).ok, true);
+  it.affixes.forEach((a) => { a.locked = true; });
+  const r = P.rerollItem(ch, it.uid);
+  assert.equal(r.ok, false);
+  assert.ok(r.reason.includes('锁定'));
+});
+
+test('normalize 清洗词条锁定并截断超额锁', () => {
+  const it = item(20, 'weapon', 950);
+  while (it.affixes.length < 3) {
+    it.affixes.push({ key: 'crit', value: 3 });
+  }
+  it.affixes.forEach((a) => { a.locked = 1; });
+  const ch = P.normalize({ name: '词条猪', inventory: [it] });
+  const locks = ch.inventory[0].affixes.filter((a) => a.locked).length;
+  assert.ok(locks <= I.MAX_AFFIX_LOCKS);
+  assert.equal(typeof ch.inventory[0].affixes[0].locked, 'boolean');
+});
+
 test('副本解锁按前一区域通关层数递进', () => {
   const ch = P.newCharacter();
   assert.deepEqual(P.unlockedBiomes(ch), ['camp']);

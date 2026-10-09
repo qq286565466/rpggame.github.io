@@ -70,13 +70,14 @@ function goShopping(ch) {
       if (JSON.stringify(ch.equipped[slot] && ch.equipped[slot].uid) === before) break;
     }
   }
-  // 2) 清理背包里明显不如当前装备的
+  // 2) 清理背包里明显不如当前装备的（按下一推进层加权）
+  const mlvl = P.targetMlvl(ch);
   let threshold = 0;
   I.EQUIP_SLOTS.forEach((s) => {
     const it = ch.equipped[s];
-    if (it) threshold = Math.max(threshold, I.power(it) * 0.75);
+    if (it) threshold = Math.max(threshold, I.power(it, mlvl) * 0.75);
   });
-  const salvaged = P.salvageBelow(ch, threshold);
+  const salvaged = P.salvageBelow(ch, threshold, { targetMlvl: mlvl });
 
   // 3) 有资源就强化：优先武器，其次护甲/头盔，保持等级均衡
   const order = ['weapon', 'armor', 'helm', 'boots', 'amulet', 'ring1', 'ring2'];

@@ -18,28 +18,32 @@
       ground: ['#312639', '#261d2c', '#1e1728', '#151021'],
       obstacleKinds: ['tent', 'rock', 'spire'],
       enemies: { melee: 'calf', charger: 'charger', ranged: 'bat', boss: 'alpha' },
-      tier: 1
+      tier: 1,
+      hazard: { key: 'stampede', name: '践踏潮', desc: '冲锋怪更常见，精英出没更频繁' }
     },
     forest: {
       key: 'forest', name: '孢子森林', mlvlBase: 5, arena: 1250,
       ground: ['#1d2b22', '#17231b', '#121b16', '#0d1512'],
       obstacleKinds: ['tree', 'mushroom', 'rock'],
       enemies: { melee: 'sporeling', charger: 'thornbeast', ranged: 'spitter', boss: 'treant' },
-      tier: 2
+      tier: 2,
+      hazard: { key: 'spores', name: '孢子毒雾', desc: '场上持续毒伤；站立不动时伤害加剧' }
     },
     cave: {
       key: 'cave', name: '时空洞窟', mlvlBase: 10, arena: 1200,
       ground: ['#1b2130', '#151a27', '#10141f', '#0b0e16'],
       obstacleKinds: ['crystal', 'stalagmite', 'rock'],
       enemies: { melee: 'crawler', charger: 'gargoyle', ranged: 'shardcaster', boss: 'golem' },
-      tier: 3
+      tier: 3,
+      hazard: { key: 'shatter', name: '碎晶坠落', desc: '周期性碎晶坠落，落地造成范围伤害' }
     },
     nest: {
       key: 'nest', name: '魔兽巢穴', mlvlBase: 16, arena: 1300,
       ground: ['#2c1c24', '#23161d', '#1a1017', '#120a10'],
       obstacleKinds: ['bone', 'egg', 'rock'],
       enemies: { melee: 'broodling', charger: 'ravager', ranged: 'venomwing', boss: 'queen' },
-      tier: 4
+      tier: 4,
+      hazard: { key: 'brood', name: '巢穴狂潮', desc: '刷怪更快，首领召唤更多幼魔' }
     }
   };
   var BIOME_ORDER = ['camp', 'forest', 'cave', 'nest'];
@@ -307,6 +311,14 @@
     this.spawnTimer = 1.2;
     // 场上同时存在的怪越多，越逼玩家走位而不是站桩
     this.aliveTarget = 8 + Math.min(12, Math.floor(this.floor / 1.2));
+    this.hazards = [];
+    this.hazardTimer = 2.2;
+    this.sporeTick = 0;
+    // 巢穴狂潮：更多同时在场怪、刷得更快
+    if (this.biome.hazard && this.biome.hazard.key === 'brood') {
+      this.aliveTarget += 3;
+      this.spawnTimer *= 0.72;
+    }
 
     this.shake = 0;
     this.hitStop = 0;
@@ -421,7 +433,13 @@
       spawnT: 0.45, anim: this.rng() * TAU,
       slamR: def.slamR, summon: def.summon, summonN: def.summonN, volley: def.volley
     };
-    if (def.boss) { e.slamCd = 3.0; e.summonCd = 8.0; e.volleyCd = 5.5; }
+    if (def.boss) {
+      e.slamCd = 3.0; e.summonCd = 8.0; e.volleyCd = 5.5;
+      if (this.biome.hazard && this.biome.hazard.key === 'brood') {
+        e.summonN = (def.summonN || 3) + 2;
+        e.summonCd = 7.0;
+      }
+    }
     this.enemies.push(e);
     if (def.boss) this.boss = e;
     this.emit('spawn', { key: key, boss: def.boss, elite: elite });
@@ -431,6 +449,12 @@
   World.prototype.pickSpawnKey = function () {
     var set = this.biome.enemies;
     var r = this.rng();
+    // 践踏潮：冲锋占比明显提高
+    if (this.biome.hazard && this.biome.hazard.key === 'stampede') {
+      if (r < 0.38) return set.melee;
+      if (r < 0.78) return set.charger;
+      return set.ranged;
+    }
     if (r < 0.58) return set.melee;
     if (r < 0.82) return set.charger;
     return set.ranged;
@@ -452,11 +476,72 @@
     }
     this.spawnTimer -= dt;
     if (this.spawnTimer > 0) return;
-    this.spawnTimer = Math.max(0.28, 0.85 - this.floor * 0.03);
+    var baseCd = Math.max(0.28, 0.85 - this.floor * 0.03);
+    if (this.biome.hazard && this.biome.hazard.key === 'brood') baseCd *= 0.72;
+    this.spawnTimer = baseCd;
     var batch = alive < this.aliveTarget ? 2 : 1;
+    var eliteRate = 0.06 + 0.02 * this.tier;
+    if (this.biome.hazard && this.biome.hazard.key === 'stampede') eliteRate += 0.05;
     for (var b = 0; b < batch; b++) {
-      var elite = this.rng() < (0.06 + 0.02 * this.tier);
+      var elite = this.rng() < eliteRate;
       this.spawnEnemy(this.pickSpawnKey(), { elite: elite });
+    }
+  };
+
+  /** 群系环境危害：毒雾 / 碎晶坠落等 */
+  World.prototype.updateHazards = function (dt) {
+    var haz = this.biome && this.biome.hazard;
+    if (!haz || this.dead || this.cleared) return;
+    var p = this.player;
+    var i;
+
+    if (haz.key === 'spores') {
+      this.sporeTick += dt;
+      if (this.sporeTick >= 0.55) {
+        this.sporeTick = 0;
+        var moving = SP.len(p.vx, p.vy) > 55;
+        var dps = (2.2 + this.mlvl * 0.55) * (moving ? 0.32 : 1);
+        this.hurtPlayer(dps * 0.55, p.x, p.y, { soft: true });
+        if (!moving) {
+          this.fx.push({
+            t: 'p', x: p.x + this.rng.range(-18, 18), y: p.y + this.rng.range(-18, 18),
+            vx: this.rng.range(-20, 20), vy: this.rng.range(-40, -10),
+            dur: 0.5, life: 0.5, color: '#7dce86', size: 3.2
+          });
+        }
+      }
+    }
+
+    if (haz.key === 'shatter') {
+      this.hazardTimer -= dt;
+      if (this.hazardTimer <= 0) {
+        this.hazardTimer = Math.max(1.35, 3.1 - this.floor * 0.06);
+        var a = this.rng() * TAU;
+        var rad = this.rng.range(30, 240);
+        var hx = clamp(p.x + Math.cos(a) * rad, -this.arena + 40, this.arena - 40);
+        var hy = clamp(p.y + Math.sin(a) * rad, -this.arena + 40, this.arena - 40);
+        this.hazards.push({
+          kind: 'crystal',
+          x: hx, y: hy,
+          r: 62 + this.mlvl * 1.2,
+          life: 0.95,
+          tele: 0.95,
+          dmg: (9 + this.mlvl * 1.8) * this.scaling().dmg
+        });
+      }
+    }
+
+    for (i = this.hazards.length - 1; i >= 0; i--) {
+      var hz = this.hazards[i];
+      hz.life -= dt;
+      if (hz.life > 0) continue;
+      this.ring(hz.x, hz.y, 10, hz.r, 0.35, '#7eb6e8', 5);
+      this.burst(hz.x, hz.y, 14, '#a8e0ff', 160, 0.4, 2.8);
+      this.shake = Math.max(this.shake, 5);
+      if (dist(hz.x, hz.y, p.x, p.y) < hz.r + p.r) {
+        this.hurtPlayer(hz.dmg, hz.x, hz.y);
+      }
+      this.hazards.splice(i, 1);
     }
   };
 
@@ -615,35 +700,45 @@
   };
 
   /* ------------------------------------------------------------- 玩家受伤 */
-  World.prototype.hurtPlayer = function (amount, srcX, srcY) {
+  /**
+   * opts.soft：环境持续伤害（毒雾等），不触发无敌帧与大硬直，仍受护甲与护盾减免。
+   */
+  World.prototype.hurtPlayer = function (amount, srcX, srcY, opts) {
+    opts = opts || {};
+    var soft = !!opts.soft;
     var p = this.player;
-    if (this.dead || p.invuln > 0) return 0;
+    if (this.dead) return 0;
+    if (!soft && p.invuln > 0) return 0;
     var reduced = amount * (1 - armorReduction(p.armor, this.mlvl));
     if (p.shield > 0) {
       var absorbed = Math.min(p.shield, reduced);
       p.shield -= absorbed;
       reduced -= absorbed;
-      this.addText(p.x, p.y - 34, '护盾 -' + Math.round(absorbed), '#8fd8ff', 13);
+      if (!soft) this.addText(p.x, p.y - 34, '护盾 -' + Math.round(absorbed), '#8fd8ff', 13);
     }
     if (reduced > 0) {
       p.hp -= reduced;
       this.stats_damageTaken += reduced;
-      this.addText(p.x, p.y - 26, '-' + Math.round(reduced), '#ff6b6b', 17);
+      this.addText(p.x, p.y - 26, (soft ? '毒 ' : '-') + Math.round(reduced), soft ? '#9dffb0' : '#ff6b6b', soft ? 13 : 17);
     }
-    p.invuln = 0.62;
-    p.hurtFlash = 0.3;
-    this.shake = Math.max(this.shake, 8);
-    this.hitStop = 0.05;
-    this.burst(p.x, p.y, 8, '#ff5c5c', 160, 0.35, 3);
-    this.emit('hurt', { amount: reduced });
-    if (this.hasUnique('swift')) p.speedBuffT = 2.5;
-    if (p.thorns > 0) {
-      for (var i = 0; i < this.enemies.length; i++) {
-        var e = this.enemies[i];
-        if (e.dying > 0) continue;
-        if (SP.dist(e.x, e.y, p.x, p.y) < e.r + p.r + 34) this.damageEnemy(e, p.thorns, {});
+    if (!soft) {
+      p.invuln = 0.62;
+      p.hurtFlash = 0.3;
+      this.shake = Math.max(this.shake, 8);
+      this.hitStop = 0.05;
+      this.burst(p.x, p.y, 8, '#ff5c5c', 160, 0.35, 3);
+      if (this.hasUnique('swift')) p.speedBuffT = 2.5;
+      if (p.thorns > 0) {
+        for (var i = 0; i < this.enemies.length; i++) {
+          var e = this.enemies[i];
+          if (e.dying > 0) continue;
+          if (SP.dist(e.x, e.y, p.x, p.y) < e.r + p.r + 34) this.damageEnemy(e, p.thorns, {});
+        }
       }
+    } else {
+      p.hurtFlash = Math.max(p.hurtFlash, 0.1);
     }
+    this.emit('hurt', { amount: reduced, soft: soft });
     if (p.hp <= 0) this.die();
     return reduced;
   };
@@ -954,6 +1049,7 @@
     this.updatePlayer(dt, input);
     this.updateEnemies(dt);
     this.updateProjectiles(dt);
+    this.updateHazards(dt);
     this.updatePickups(dt);
     this.updateVisuals(dt);
 

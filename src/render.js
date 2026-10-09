@@ -384,6 +384,42 @@
       ctx.beginPath(); ctx.arc(pp.x, pp.y, pr.r * 0.6, 0, TAU); ctx.fill();
     }
 
+    /* ---------------------------------------------------------- 群系危害预警 */
+    if (world.hazards && world.hazards.length) {
+      for (var hi = 0; hi < world.hazards.length; hi++) {
+        var hz = world.hazards[hi];
+        var hp = S(hz.x, hz.y);
+        var ratio = hz.tele ? Math.max(0.15, hz.life / hz.tele) : 0.5;
+        ctx.save();
+        ctx.globalAlpha = 0.22 + (1 - ratio) * 0.35;
+        ctx.strokeStyle = '#9fd8ff';
+        ctx.fillStyle = 'rgba(126,182,232,' + (0.12 + (1 - ratio) * 0.22) + ')';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 5]);
+        ctx.beginPath();
+        ctx.arc(hp.x, hp.y, hz.r, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(210,240,255,' + (0.35 + (1 - ratio) * 0.5) + ')';
+        ctx.beginPath();
+        ctx.moveTo(hp.x, hp.y - 10 - (1 - ratio) * 28);
+        ctx.lineTo(hp.x + 7, hp.y - 2);
+        ctx.lineTo(hp.x - 7, hp.y - 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+    // 孢子毒雾氛围：极淡的绿色呼吸罩
+    if (world.biome && world.biome.hazard && world.biome.hazard.key === 'spores') {
+      var pulse = 0.04 + Math.sin(this.t * 2.1) * 0.02;
+      ctx.save();
+      ctx.fillStyle = 'rgba(90,160,100,' + pulse + ')';
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
+
     /* ---------------------------------------------------------- 怪物 */
     var boss = null;
     for (var ei = 0; ei < world.enemies.length; ei++) {
