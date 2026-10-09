@@ -554,7 +554,8 @@
     var breath = Math.sin(this.t * 2.15);
     var shadowScale = 1 + breath * 0.08 * idleEnergy;
 
-    var heroSz = 54;
+    // 与 NPC 立绘同量级：按碰撞半径放大，避免再缩成「芝麻粒」
+    var heroSz = Math.round(Math.max(64, (p.r || 17) * 3.6));
     // 影子贴在脚下（随呼吸略微缩放）
     ctx.globalAlpha = 0.4;
     ctx.fillStyle = '#000';
@@ -1103,7 +1104,7 @@
     var pMoving = SP.len(h.player.vx, h.player.vy) > 12;
     var pBreath = Math.sin(t * 2.15);
     var pShadow = 1 + pBreath * 0.08 * (pMoving ? 0.35 : 1);
-    var hubHeroSz = 54;
+    var hubHeroSz = Math.round(Math.max(64, (h.player.r || 17) * 3.6));
     ctx.globalAlpha = 0.4;
     ctx.fillStyle = '#000';
     ellipse(ctx, pl.x + 2, pl.y + hubHeroSz * 0.32, hubHeroSz * 0.38 * pShadow, hubHeroSz * 0.16 * (2 - pShadow)); ctx.fill();
