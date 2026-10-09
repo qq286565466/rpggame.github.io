@@ -1027,8 +1027,8 @@
           <button class="ghost tiny-btn" data-close="panelOnline">关闭 (Esc)</button>
         </div>
         <p class="tiny muted" style="margin:0 0 10px">
-          先启动联机服务端：<code>npm run online</code>（即 <code>node server</code>），再点下方接入。
-          大厅里能看见其他旅人；可组队进本，也可各自单刷。公网部署见 <code>server/README.md</code>。
+          服主请运行 <code>npm run deploy</code>（自动提示需映射的端口/IP，并打开服主面板 <code>/host</code>）。
+          仅本机调试可用 <code>npm run online</code>。接入后大厅可见其他旅人；可组队或单刷。
         </p>
         <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <input id="onlineUrl" type="text" placeholder="ws://127.0.0.1:4321/ws" style="flex:1;min-width:180px">
@@ -1401,13 +1401,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.11.1';
+  SP.VERSION = '2.11.2';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.11.2',
+      date: '2026-10-09',
+      title: '服主自动部署与端口映射提醒',
+      items: [
+        '新增 npm run deploy：自动探测局域网/公网 IP，启动联机服，并醒目提示需映射的 TCP 端口与内部 IP',
+        '生成 host-card.txt 与服主面板 /host，方便复制发给好友',
+        'HTTP 与 WebSocket 共用同一端口，只需映射一次'
+      ]
+    },
     {
       version: '2.11.1',
       date: '2026-10-09',

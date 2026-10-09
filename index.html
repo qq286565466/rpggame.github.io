@@ -1027,8 +1027,8 @@
           <button class="ghost tiny-btn" data-close="panelOnline">关闭 (Esc)</button>
         </div>
         <p class="tiny muted" style="margin:0 0 10px">
-          先启动联机服务端：<code>npm run online</code>（即 <code>node server</code>），再点下方接入。
-          大厅里能看见其他旅人；可组队进本，也可各自单刷。公网部署见 <code>server/README.md</code>。
+          服主请运行 <code>npm run deploy</code>（自动提示需映射的端口/IP，并打开服主面板 <code>/host</code>）。
+          仅本机调试可用 <code>npm run online</code>。接入后大厅可见其他旅人；可组队或单刷。
         </p>
         <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <input id="onlineUrl" type="text" placeholder="ws://127.0.0.1:4321/ws" style="flex:1;min-width:180px">
