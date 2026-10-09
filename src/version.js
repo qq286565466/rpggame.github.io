@@ -3,13 +3,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.5.0';
+  SP.VERSION = '2.6.0';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.6.0',
+      date: '2026-10-09',
+      title: '装备上锁',
+      items: [
+        '背包与铁匠铺可为装备上锁/解锁，格子显示「锁」标记',
+        '上锁装备不可分解或出售，也不会被「分解垃圾」批量清理',
+        '锁定状态写入本地存档，旧存档自动兼容'
+      ]
+    },
     {
       version: '2.5.0',
       date: '2026-10-09',
