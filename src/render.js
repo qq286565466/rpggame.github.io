@@ -433,6 +433,27 @@
     /* ---------------------------------------------------------- 普攻扇形 */
     this.drawAttackArc(ctx, world, S, opts);
 
+    /* ---------------------------------------------------------- 小领域圈 */
+    if (world.player && world.player.domainT > 0 && world.player.domainR > 0) {
+      var dp = S(world.player.x, world.player.y);
+      var pulseD = 0.55 + Math.sin(this.t * 5.5) * 0.12;
+      ctx.save();
+      ctx.globalAlpha = 0.16 + pulseD * 0.1;
+      ctx.fillStyle = 'rgba(160,100,255,0.35)';
+      ctx.beginPath();
+      ctx.arc(dp.x, dp.y, world.player.domainR, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 0.55 + pulseD * 0.25;
+      ctx.strokeStyle = '#d8b4ff';
+      ctx.lineWidth = 2.4;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.arc(dp.x, dp.y, world.player.domainR, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
     /* ---------------------------------------------------------- 玩家 */
     this.drawPlayer(ctx, world, S, opts);
 

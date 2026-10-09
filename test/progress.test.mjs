@@ -528,6 +528,29 @@ test('神秘商人：消耗秘宝换取高品质装备，背包满时被拒', ()
   assert.equal(P.buyMysteryItem(ch, 30, 'weapon').ok, false, '背包满时应被拒');
 });
 
+test('缚誓匣：随机套装件与裁刃保底', () => {
+  const ch = P.newCharacter();
+  ch.stones = P.OATH_COST + P.OATH_WEAPON_COST + 2;
+  const r1 = P.buyOathPiece(ch, 20, false);
+  assert.equal(r1.ok, true);
+  assert.equal(r1.item.set, 'oath');
+  assert.equal(r1.item.rarity, 'legendary');
+  assert.ok(I.BASE_BY_KEY[r1.item.base].collab);
+  assert.equal(ch.stones, P.OATH_WEAPON_COST + 2);
+  assert.equal(ch.inventory.length, 1);
+  assert.ok(P.isGearDiscovered(ch, r1.item.base));
+
+  const r2 = P.buyOathPiece(ch, 22, true);
+  assert.equal(r2.ok, true);
+  assert.equal(r2.item.base, 'oathblade');
+  assert.equal(r2.item.unique, 'domaincut');
+  assert.equal(ch.stones, 2);
+  assert.ok(P.isUniqueDiscovered(ch, 'domaincut'));
+
+  ch.stones = 0;
+  assert.equal(P.buyOathPiece(ch, 20, false).ok, false, '秘宝不足应被拒');
+});
+
 test('全套装备后的角色属性明显强于裸装', () => {
   const bare = P.newCharacter();
   const geared = P.newCharacter();

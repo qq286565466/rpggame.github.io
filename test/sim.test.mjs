@@ -705,6 +705,62 @@ test('传说武器·超载：提升技能伤害并缩短震击冷却', () => {
   assert.ok(w.player.quakeCd < 8 * 0.9, '超载应缩短震击冷却: ' + w.player.quakeCd);
 });
 
+test('缚誓裁刃：普攻叠咒印，按武器技展开领域', () => {
+  const rng = SP.makeRng(44);
+  const blade = I.makeSetPiece(rng, 'oath', { ilvl: 20, baseKey: 'oathblade' });
+  const helm = I.makeSetPiece(rng, 'oath', { ilvl: 20, baseKey: 'oathhelm' });
+  const plate = I.makeSetPiece(rng, 'oath', { ilvl: 20, baseKey: 'oathplate' });
+  const boots = I.makeSetPiece(rng, 'oath', { ilvl: 20, baseKey: 'oathboots' });
+  const ch = Object.assign(makeCharacter({ level: 12 }), {
+    equipped: {
+      weapon: blade, helm, armor: plate, boots,
+      amulet: null, ring1: null, ring2: null
+    }
+  });
+  const derived = SP.deriveCharacter(ch);
+  assert.ok(derived.uniques.indexOf('domaincut') >= 0);
+  assert.equal(derived.setFlags.markDouble, true, '4 件应激活咒印加倍');
+
+  const w = makeWorld({ seed: 46, character: ch });
+  assert.equal(w.player.curseMarks, 0);
+  assert.equal(w.castWeaponSkill(), false, '无咒印不能开领域');
+
+  // 造一只贴脸怪，直接走命中管线叠印
+  w.enemies.push({
+    x: w.player.x + 40, y: w.player.y, r: 16, hp: 500, maxHp: 500,
+    dying: 0, boss: false, elite: false, armor: 0, name: '试靶'
+  });
+  const foe = w.enemies[0];
+  w.hitEnemyWithAttack(foe, 0, { noProc: false });
+  assert.ok(w.player.curseMarks >= 2, '4 件套应一次叠 2 印: ' + w.player.curseMarks);
+
+  w.player.curseMarks = 5;
+  const ok = w.castWeaponSkill();
+  assert.equal(ok, true);
+  assert.equal(w.player.curseMarks, 0);
+  assert.ok(w.player.domainT > 3, '领域应持续数秒');
+  assert.ok(w.player.domainR >= 150, '领域应有半径');
+  assert.ok(w.player.weaponSkillCd > 0, '武器技应进冷却');
+  const cds = w.cooldowns();
+  assert.equal(cds.weapon.ready, true);
+  assert.ok(cds.weapon.left > 0);
+
+  // 域内增伤：同伤害在领域内外不同
+  const e2 = {
+    x: w.player.x + 20, y: w.player.y, r: 14, hp: 1000, maxHp: 1000,
+    dying: 0, boss: false, elite: false, armor: 0, name: '域内'
+  };
+  w.enemies.push(e2);
+  const hpBefore = e2.hp;
+  w.hitEnemyWithAttack(e2, 0, { noProc: true, noMark: true });
+  const inDomainDmg = hpBefore - e2.hp;
+  w.player.domainT = 0;
+  e2.hp = 1000;
+  w.hitEnemyWithAttack(e2, 0, { noProc: true, noMark: true });
+  const outDomainDmg = 1000 - e2.hp;
+  assert.ok(inDomainDmg > outDomainDmg * 1.05, '领域内应增伤');
+});
+
 console.log('\n时空猪 · 战斗与副本逻辑测试\n' + out.join('\n'));
 console.log(`\n通过 ${pass} / ${pass + fail}` + (fail ? `  ✗ 失败 ${fail}` : '  ✓ 全部通过'));
 process.exit(fail ? 1 : 0);

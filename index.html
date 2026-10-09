@@ -633,7 +633,7 @@
   .slot.ready { border-color: rgba(140, 240, 200, .7); box-shadow: 0 0 14px rgba(120, 240, 190, .28); }
   .slot .cnt { position: absolute; right: 5px; bottom: 3px; font-size: 11px; font-weight: 800; color: var(--gold); text-shadow: 0 0 6px #000; }
   #slotAtk { color: #dfe9ff; } #slotQuake { color: #7fe3ff; } #slotBless { color: #ffe9a8; }
-  #slotDash { color: #a8f0ff; } #slotSteak { color: #ffb27a; }
+  #slotDash { color: #a8f0ff; } #slotSteak { color: #ffb27a; } #slotWeapon { color: #c07bff; }
   .boss-bar { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); width: min(560px, 62vw); display: none; }
   .boss-bar.on { display: block; }
   .boss-bar .bb-row { display: flex; align-items: center; gap: 10px; }
@@ -1073,10 +1073,12 @@
         </div>
         <div class="help">
           <b>操作</b>：<span class="key">WASD</span> 移动 · <span class="key">LMB</span> 攻击 · <span class="key">R</span> 自动攻击 · <span class="key">Q</span> 震击 ·
-          <span class="key">E</span> 赐福 · <span class="key">空格</span> 冲刺 · <span class="key">1</span> 牛排 · <span class="key">Esc</span> 暂停。
+          <span class="key">E</span> 赐福 · <span class="key">空格</span> 冲刺 · <span class="key">1</span> 牛排 · <span class="key">2</span> 武器技（缚誓裁刃）· <span class="key">Esc</span> 暂停。
           脚下范围提示随武器变化：剑斧锤枪是扇形，链锤环身回旋，弓/法杖是远程瞄准线。
           自动攻击打开后，会先转向附近最近的敌人，进入攻击距离后再出手。<br><br>
-          <b>武器类型</b>：短剑挥砍 · 战斧横劈 · 匕首连刺 · 重锤砸击（震波）· 长枪突刺 · 短弓射箭 · 法杖奥术弹（可穿透）· 链锤回旋。<br><br>
+          <b>武器类型</b>：短剑挥砍 · 战斧横劈 · 匕首连刺 · 重锤砸击（震波）· 长枪突刺 · 短弓射箭 · 法杖奥术弹（可穿透）· 链锤回旋 · 缚誓裁刃裁斩。<br><br>
+          <b>缚誓远征</b>：商人处用秘宝开启「缚誓匣」获取联动套装。装备「缚誓裁刃」后普攻叠咒印，按 <span class="key">2</span> 消耗咒印展开「开·小领域」。
+          凑齐 2 / 4 / 6 件激活套装效果（技能伤害、咒印加速、领域初绽眩晕等）。套装不进普通掉落。<br><br>
           <b>藏身处</b>：走到 NPC 面前按 <span class="key">F</span> 交互 —— 铁匠负责强化/重铸/分解，商人负责补给与神秘装备，
           时空传送门用来选择副本层级。背包 / 传送门 / 战绩 / 图鉴 都可以用下方按钮或快捷键直接打开。<br><br>
           <b>图鉴</b>：按 <span class="key">G</span> 打开图鉴，可切换怪物 / 装备 / 传说。击败怪物或获得装备后解锁条目；未收录的显示为「？？？」。<br><br>
@@ -1155,6 +1157,7 @@
         <div class="slot" id="slotBless"><span class="sk">E</span><svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2.6c.8 4.6 2.4 6.2 7 7-4.6.8-6.2 2.4-7 7-.8-4.6-2.4-6.2-7-7 4.6-.8 6.2-2.4 7-7z" fill="rgba(255,233,168,.3)"/></svg><span class="sn">赐福</span><div class="cd"></div><div class="cdt"></div></div>
         <div class="slot" id="slotDash"><span class="sk">SP</span><svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h13M12 6l6 6-6 6"/></svg><span class="sn">冲刺</span><div class="cd"></div><div class="cdt"></div></div>
         <div class="slot" id="slotSteak"><span class="sk">1</span><img class="si px-icon" data-icon="steak" alt="" draggable="false"><span class="sn">牛排</span><div class="cd"></div><div class="cdt"></div><span class="cnt" id="steakCnt">0</span></div>
+        <div class="slot hidden" id="slotWeapon"><span class="sk">2</span><svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><circle cx="12" cy="12" r="7.2" stroke-dasharray="3 2.2" fill="rgba(192,123,255,.22)"/><path d="M12 5.2v2.4M12 16.4v2.4M5.2 12h2.4M16.4 12h2.4"/><path d="M9.2 9.2 14.8 14.8"/></svg><span class="sn">领域</span><div class="cd"></div><div class="cdt"></div><span class="cnt" id="weaponMarkCnt">0</span></div>
         <div class="slot" id="slotPause" style="width:46px;height:46px"><svg class="si" viewBox="0 0 24 24" fill="currentColor" style="width:15px;height:15px"><rect x="6" y="5" width="4" height="14" rx="1.4"/><rect x="14" y="5" width="4" height="14" rx="1.4"/></svg></div>
       </div>
     </div>

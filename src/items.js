@@ -124,7 +124,9 @@
     spear: { style: 'thrust', label: '突刺', range: 128, arc: 0.70, maxHits: 3, knock: 145, swingT: 0.22, dmgMul: 1.02 },
     bow: { style: 'shot', label: '射箭', range: 340, arc: 0.32, maxHits: 1, knock: 70, swingT: 0.18, dmgMul: 0.96, projSpeed: 560, projR: 5.5, pierce: 1 },
     staff: { style: 'bolt', label: '奥术弹', range: 280, arc: 0.48, maxHits: 1, knock: 55, swingT: 0.22, dmgMul: 0.90, projSpeed: 430, projR: 7.5, pierce: 2 },
-    flail: { style: 'spin', label: '回旋', range: 94, arc: Math.PI * 2, maxHits: 5, knock: 155, swingT: 0.30, dmgMul: 0.84 }
+    flail: { style: 'spin', label: '回旋', range: 94, arc: Math.PI * 2, maxHits: 5, knock: 155, swingT: 0.30, dmgMul: 0.84 },
+    /* 联动套装武器：宽弧裁斩，略长于短剑 */
+    oathblade: { style: 'slash', label: '裁斩', range: 98, arc: 2.15, maxHits: 4, knock: 150, swingT: 0.22, dmgMul: 1.05 }
   };
   var DEFAULT_WEAPON_PROFILE = WEAPON_PROFILES.sword;
 
@@ -160,37 +162,66 @@
       { key: 'spear', name: '时空长枪', stats: { atk: 14, move: 3 } },
       { key: 'bow', name: '风语短弓', stats: { atk: 11, aspd: 8, crit: 4 } },
       { key: 'staff', name: '秘法杖', stats: { atk: 10, skillDmg: 10, cdr: 4 } },
-      { key: 'flail', name: '星屑链锤', stats: { atk: 15, thorns: 4, critDmg: 8 } }
+      { key: 'flail', name: '星屑链锤', stats: { atk: 15, thorns: 4, critDmg: 8 } },
+      /* 联动 · 缚誓远征（不进普通掉落池，见 collab） */
+      { key: 'oathblade', name: '缚誓裁刃', stats: { atk: 15, skillDmg: 8, crit: 3 }, set: 'oath', collab: true, fixedUnique: 'domaincut' }
     ],
     helm: [
       { key: 'hood', name: '皮革头巾', stats: { hp: 26, armor: 5 } },
       { key: 'circlet', name: '时序头环', stats: { hp: 18, skillDmg: 6 } },
-      { key: 'ironhelm', name: '铁质头盔', stats: { hp: 34, armor: 9, aspd: -4 } }
+      { key: 'ironhelm', name: '铁质头盔', stats: { hp: 34, armor: 9, aspd: -4 } },
+      { key: 'oathhelm', name: '缚誓头冠', stats: { hp: 28, armor: 7, skillDmg: 5 }, set: 'oath', collab: true }
     ],
     armor: [
       { key: 'vest', name: '旅者皮甲', stats: { hp: 40, armor: 10 } },
       { key: 'robe', name: '秘术长袍', stats: { hp: 30, armor: 6, cdr: 5 } },
-      { key: 'plate', name: '科多兽重铠', stats: { hp: 55, armor: 16, move: -4 } }
+      { key: 'plate', name: '科多兽重铠', stats: { hp: 55, armor: 16, move: -4 } },
+      { key: 'oathplate', name: '缚誓战袍', stats: { hp: 48, armor: 12, skillDmg: 4 }, set: 'oath', collab: true }
     ],
     boots: [
       { key: 'lightboots', name: '轻便战靴', stats: { armor: 5, move: 6 } },
-      { key: 'greaves', name: '铁蹄战靴', stats: { armor: 9, hp: 20, move: 3 } }
+      { key: 'greaves', name: '铁蹄战靴', stats: { armor: 9, hp: 20, move: 3 } },
+      { key: 'oathboots', name: '缚誓行靴', stats: { armor: 7, move: 5, cdr: 3 }, set: 'oath', collab: true }
     ],
     amulet: [
       { key: 'amulet', name: '时空护符', stats: { hp: 22, crit: 3 } },
-      { key: 'pendant', name: '秘宝吊坠', stats: { luck: 8, greed: 10 } }
+      { key: 'pendant', name: '秘宝吊坠', stats: { luck: 8, greed: 10 } },
+      { key: 'oathamulet', name: '缚誓印符', stats: { hp: 20, skillDmg: 8, crit: 2 }, set: 'oath', collab: true }
     ],
     ring: [
       { key: 'coinring', name: '金币指环', stats: { greed: 8, hp: 14 } },
       { key: 'hunterband', name: '猎手戒', stats: { crit: 4, atk: 6 } },
-      { key: 'signet', name: '秘宝印戒', stats: { luck: 6, skillDmg: 6 } }
+      { key: 'signet', name: '秘宝印戒', stats: { luck: 6, skillDmg: 6 } },
+      { key: 'oathring', name: '缚誓指环', stats: { atk: 7, skillDmg: 6, cdr: 3 }, set: 'oath', collab: true }
     ]
   };
+
+  /**
+   * 套装定义（原创「缚誓」主题：领域 / 束缚感，非第三方 IP）。
+   * bonuses[].stats 直接并入 aggregate；flags 交由战斗逻辑读取。
+   */
+  var GEAR_SETS = {
+    oath: {
+      key: 'oath',
+      name: '缚誓远征',
+      color: '#c07bff',
+      pieces: ['oathblade', 'oathhelm', 'oathplate', 'oathboots', 'oathamulet', 'oathring'],
+      bonuses: [
+        { need: 2, desc: '技能伤害 +12%，攻击速度 +6%', stats: { skillDmg: 12, aspd: 6 } },
+        { need: 4, desc: '咒印叠加速度翻倍；领域内移速 +10%', flags: { markDouble: true, domainMove: 0.10 } },
+        { need: 6, desc: '领域初绽眩晕 0.55 秒，领域爆发伤害 +25%', flags: { domainStun: 0.55, domainDmg: 0.25 } }
+      ]
+    }
+  };
+  var GEAR_SET_BY_KEY = GEAR_SETS;
 
   var BASE_BY_KEY = {};
   Object.keys(BASES).forEach(function (slot) {
     BASES[slot].forEach(function (b) {
-      BASE_BY_KEY[b.key] = { key: b.key, slot: slot === 'ring' ? 'ring' : slot, name: b.name, stats: b.stats };
+      BASE_BY_KEY[b.key] = {
+        key: b.key, slot: slot === 'ring' ? 'ring' : slot, name: b.name, stats: b.stats,
+        set: b.set || null, collab: !!b.collab, fixedUnique: b.fixedUnique || null
+      };
     });
   });
 
@@ -219,19 +250,22 @@
     { key: 'execute', name: '猎杀', desc: '对生命低于 30% 的敌人伤害 +75%', slots: ['weapon'] },
     { key: 'starchain', name: '星链', desc: '普攻命中时 35% 连锁打击最近另一敌人', slots: ['weapon'] },
     { key: 'overcharge', name: '超载', desc: '技能伤害 +30%，震击冷却缩短 25%', slots: ['weapon'] },
-    { key: 'bloodthirst', name: '渴血', desc: '击杀回复 5% 最大生命', slots: ['weapon'] }
+    { key: 'bloodthirst', name: '渴血', desc: '击杀回复 5% 最大生命', slots: ['weapon'] },
+    /* 套装专属武器技：不进普通传说池 */
+    { key: 'domaincut', name: '开·小领域', desc: '普攻叠咒印；按 2 消耗咒印展开领域：爆发伤害、减速敌人并对域内目标增伤', slots: ['weapon'], setOnly: true }
   ];
   var UNIQUE_BY_KEY = {};
   UNIQUES.forEach(function (u) { UNIQUE_BY_KEY[u.key] = u; });
 
-  /** 某部位可 roll 到的传说独特池；无匹配时退回全表 */
+  /** 某部位可 roll 到的传说独特池（排除套装专属）；无匹配时退回全表 */
   function uniquesForSlot(slot) {
     var pool = [];
     for (var i = 0; i < UNIQUES.length; i++) {
       var u = UNIQUES[i];
+      if (u.setOnly) continue;
       if (!u.slots || (slot && u.slots.indexOf(slot) >= 0)) pool.push(u);
     }
-    return pool.length ? pool : UNIQUES.slice();
+    return pool.length ? pool : UNIQUES.filter(function (u) { return !u.setOnly; });
   }
 
   function pickUnique(rng, slot) {
@@ -275,7 +309,7 @@
 
   /* --------------------------------------------------------- 随机生成一件 */
   /**
-   * opts: { slot, ilvl, rarityBias(0~1 提升稀有度), luck(0~1) }
+   * opts: { slot, ilvl, rarityBias, luck, baseKey, allowCollab, forceRarity, forceUnique }
    */
   function roll(rng, opts) {
     opts = opts || {};
@@ -284,18 +318,28 @@
     if (DROP_SLOTS.indexOf(slot) < 0) slot = 'weapon';
 
     // 稀有度：按权重抽，幸运与层级偏移会提高稀有度档位的权重
-    var bias = 1 + (opts.rarityBias || 0) + (opts.luck || 0) * 0.6;
-    var pool = RARITIES.map(function (r) {
-      return { r: r, weight: r.weight * (r.index === 0 ? 1 : Math.pow(bias, r.index)) };
-    });
-    var total = pool.reduce(function (s, p) { return s + p.weight; }, 0);
-    var rollv = rng() * total, rarity = RARITIES[0];
-    for (var i = 0; i < pool.length; i++) {
-      rollv -= pool[i].weight;
-      if (rollv <= 0) { rarity = pool[i].r; break; }
+    var rarity;
+    if (opts.forceRarity && RARITY_BY_KEY[opts.forceRarity]) {
+      rarity = RARITY_BY_KEY[opts.forceRarity];
+    } else {
+      var bias = 1 + (opts.rarityBias || 0) + (opts.luck || 0) * 0.6;
+      var pool = RARITIES.map(function (r) {
+        return { r: r, weight: r.weight * (r.index === 0 ? 1 : Math.pow(bias, r.index)) };
+      });
+      var total = pool.reduce(function (s, p) { return s + p.weight; }, 0);
+      var rollv = rng() * total;
+      rarity = RARITIES[0];
+      for (var i = 0; i < pool.length; i++) {
+        rollv -= pool[i].weight;
+        if (rollv <= 0) { rarity = pool[i].r; break; }
+      }
     }
 
-    var baseList = BASES[slot] || BASES.weapon;
+    var baseList = (BASES[slot] || BASES.weapon).filter(function (b) {
+      if (opts.baseKey) return b.key === opts.baseKey;
+      return opts.allowCollab ? true : !b.collab;
+    });
+    if (!baseList.length) baseList = (BASES[slot] || BASES.weapon).filter(function (b) { return !b.collab; });
     var base = baseList[Math.floor(rng() * baseList.length)];
 
     // 基础属性
@@ -324,9 +368,13 @@
       stats[af.key] = (stats[af.key] || 0) + value;
     }
 
-    // 传说附带独特效果（武器部位可抽到武器专属传说）
+    // 传说附带独特效果；套装件可用 fixedUnique / forceUnique
     var unique = null;
-    if (rarity.key === 'legendary') {
+    if (opts.forceUnique && UNIQUE_BY_KEY[opts.forceUnique]) {
+      unique = opts.forceUnique;
+    } else if (base.fixedUnique && rarity.key === 'legendary') {
+      unique = base.fixedUnique;
+    } else if (rarity.key === 'legendary') {
       unique = pickUnique(rng, slot);
     }
 
@@ -356,8 +404,59 @@
       affixes: affixes,
       upgrade: 0,
       unique: unique,
+      set: base.set || null,
       locked: false
     };
+  }
+
+  /** 制作一件联动套装部件（传说保底） */
+  function makeSetPiece(rng, setKey, opts) {
+    opts = opts || {};
+    var setDef = GEAR_SETS[setKey];
+    if (!setDef) return null;
+    var pieceKey = opts.baseKey;
+    if (!pieceKey) {
+      pieceKey = setDef.pieces[Math.floor(rng() * setDef.pieces.length)];
+    }
+    var meta = BASE_BY_KEY[pieceKey];
+    if (!meta || meta.set !== setKey) return null;
+    return roll(rng, {
+      slot: meta.slot,
+      ilvl: opts.ilvl || 20,
+      baseKey: pieceKey,
+      allowCollab: true,
+      forceRarity: 'legendary',
+      forceUnique: meta.fixedUnique || null,
+      rarityBias: 3
+    });
+  }
+
+  function setProgress(equipped) {
+    var counts = {};
+    EQUIP_SLOTS.forEach(function (slot) {
+      var it = equipped && equipped[slot];
+      if (!it) return;
+      var setKey = it.set || (BASE_BY_KEY[it.base] && BASE_BY_KEY[it.base].set);
+      if (!setKey || !GEAR_SETS[setKey]) return;
+      counts[setKey] = (counts[setKey] || 0) + 1;
+    });
+    var active = [];
+    Object.keys(counts).forEach(function (key) {
+      var def = GEAR_SETS[key];
+      var n = counts[key];
+      var stats = {}, flags = {}, lines = [];
+      def.bonuses.forEach(function (b) {
+        if (n >= b.need) {
+          lines.push({ need: b.need, desc: b.desc, on: true });
+          if (b.stats) Object.keys(b.stats).forEach(function (k) { stats[k] = (stats[k] || 0) + b.stats[k]; });
+          if (b.flags) Object.keys(b.flags).forEach(function (k) { flags[k] = b.flags[k]; });
+        } else {
+          lines.push({ need: b.need, desc: b.desc, on: false });
+        }
+      });
+      active.push({ key: key, name: def.name, color: def.color, count: n, total: def.pieces.length, stats: stats, flags: flags, lines: lines });
+    });
+    return { counts: counts, active: active };
   }
 
   /** 返回含强化加成的最终属性表 */
@@ -412,7 +511,7 @@
     return Math.round(total);
   }
 
-  /** 汇总所有已装备物品的属性 */
+  /** 汇总所有已装备物品的属性（含已激活套装加成） */
   function aggregate(equipped) {
     var out = {}, uniques = [];
     EQUIP_SLOTS.forEach(function (slot) {
@@ -422,7 +521,12 @@
       Object.keys(s).forEach(function (k) { out[k] = (out[k] || 0) + s[k]; });
       if (it.unique && uniques.indexOf(it.unique) < 0) uniques.push(it.unique);
     });
+    var sets = setProgress(equipped);
+    sets.active.forEach(function (row) {
+      Object.keys(row.stats || {}).forEach(function (k) { out[k] = (out[k] || 0) + row.stats[k]; });
+    });
     out.__uniques = uniques;
+    out.__sets = sets;
     return out;
   }
 
@@ -569,6 +673,8 @@
     BASES: BASES,
     BASE_BY_KEY: BASE_BY_KEY,
     GEAR_SLOT_ORDER: GEAR_SLOT_ORDER,
+    GEAR_SETS: GEAR_SETS,
+    GEAR_SET_BY_KEY: GEAR_SET_BY_KEY,
     allBases: allBases,
     WEAPON_PROFILES: WEAPON_PROFILES,
     UNIQUES: UNIQUES,
@@ -583,6 +689,8 @@
     upgradeMult: upgradeMult,
     weaponProfile: weaponProfile,
     roll: roll,
+    makeSetPiece: makeSetPiece,
+    setProgress: setProgress,
     itemStats: itemStats,
     powerWeights: powerWeights,
     power: power,

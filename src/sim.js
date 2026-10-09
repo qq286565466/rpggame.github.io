@@ -152,6 +152,11 @@
 
     var weapon = (ch.equipped && ch.equipped.weapon) || null;
     var wpn = SP.Items.weaponProfile(weapon);
+    var setInfo = eq.__sets || { active: [], counts: {} };
+    var setFlags = {};
+    (setInfo.active || []).forEach(function (row) {
+      Object.keys(row.flags || {}).forEach(function (k) { setFlags[k] = row.flags[k]; });
+    });
 
     return {
       level: lv,
@@ -171,7 +176,9 @@
       skillDmg: skillDmg,
       cdr: cdr,
       uniques: uniq,
-      weapon: wpn
+      weapon: wpn,
+      sets: setInfo,
+      setFlags: setFlags
     };
   }
 
@@ -262,11 +269,17 @@
       uniques: stats.uniques,
       atkCd: 0, swingT: 0, swingDir: 0,
       quakeCd: 0, blessCd: 0, useCd: 0, dashCd: 0, dashT: 0, dashDir: 0,
+      weaponSkillCd: 0,
       shield: 0, shieldT: 0, dmgBuffT: 0, dmgBuffMul: 1,
       speedBuffT: 0, invuln: 0, hurtFlash: 0, walkPhase: 0,
-      killStreak: 0, level: stats.level
+      killStreak: 0, level: stats.level,
+      curseMarks: 0, curseMarkMax: 5,
+      domainT: 0, domainR: 0, domainDmgMul: 1,
+      setFlags: stats.setFlags || {},
+      sets: stats.sets || null
     };
     this.hasUnique = function (k) { return p.uniques.indexOf(k) >= 0; };
+    this.setFlag = function (k) { return p.setFlags && p.setFlags[k]; };
 
     this.obstacles = buildObstacles(this.rng, this.biome);
     this.decals = [];
@@ -925,6 +938,10 @@
     if (this.hasUnique('berserk') && p.hp / p.maxHp < 0.40) mul *= 1.4;
     // 传说武器：猎杀 — 残血增伤
     if (this.hasUnique('execute') && e.maxHp > 0 && e.hp / e.maxHp < 0.30) mul *= 1.75;
+    // 领域内增伤
+    if (p.domainT > 0 && dist(p.x, p.y, e.x, e.y) <= p.domainR + e.r) {
+      mul *= 1.18 * (p.domainDmgMul || 1);
+    }
     mul *= (wp.dmgMul || 1) * (opts.dmgScale || 1);
     var dmg = p.damage * mul * (crit ? p.critMult : 1);
     var dealt = this.damageEnemy(e, dmg, {
@@ -937,12 +954,21 @@
     if (dealt > 0 && !opts.noProc) this.procWeaponUniques(e, ang, opts);
   };
 
-  /** 传说武器命中触发：裂空溅射 / 星链 */
+  /** 传说武器命中触发：裂空溅射 / 星链 / 咒印 */
   World.prototype.procWeaponUniques = function (e, ang, opts) {
     opts = opts || {};
     var p = this.player;
     var wp = p.weapon || SP.Items.weaponProfile(null);
     var i, t, d;
+
+    // 缚誓裁刃：普攻叠咒印
+    if (this.hasUnique('domaincut') && !opts.noMark) {
+      var gain = this.setFlag('markDouble') ? 2 : 1;
+      p.curseMarks = Math.min(p.curseMarkMax, (p.curseMarks || 0) + gain);
+      if (p.curseMarks >= p.curseMarkMax) {
+        this.addText(p.x, p.y - 52, '咒印已满', '#c07bff', 14, -20);
+      }
+    }
 
     if (this.hasUnique('rift')) {
       var riftR = 95;
@@ -1075,6 +1101,82 @@
     return true;
   };
 
+  /**
+   * 武器技能「开·小领域」：消耗咒印展开领域。
+   * 至少 1 层咒印；层数越高持续时间与爆发越高。
+   */
+  World.prototype.castWeaponSkill = function () {
+    var p = this.player;
+    if (this.dead || !this.hasUnique('domaincut')) return false;
+    if (p.weaponSkillCd > 0) return false;
+    if ((p.curseMarks || 0) < 1) {
+      this.addText(p.x, p.y - 40, '需要咒印', '#c07bff', 14, -18);
+      return false;
+    }
+    var marks = p.curseMarks;
+    p.curseMarks = 0;
+    p.weaponSkillCd = 7.5 * (1 - p.cdr);
+    var R = 150 + marks * 14;
+    var dur = 3.2 + marks * 0.45;
+    var burstMul = 1 + marks * 0.12;
+    if (this.setFlag('domainDmg')) burstMul *= (1 + Number(this.setFlag('domainDmg')));
+    p.domainT = dur;
+    p.domainR = R;
+    p.domainDmgMul = 1 + (this.setFlag('domainDmg') ? Number(this.setFlag('domainDmg')) : 0);
+    this.ring(p.x, p.y, 18, R, 0.55, '#c07bff', 8);
+    this.ring(p.x, p.y, 10, R * 0.72, 0.4, '#ffe9a8', 4);
+    this.burst(p.x, p.y, 34, '#c07bff', 260, 0.7, 3.6);
+    this.shake = Math.max(this.shake, 12);
+    this.addText(p.x, p.y - 78, '开·小领域 ×' + marks, '#e0c0ff', 22, -28);
+    this.emit('domain', { marks: marks, r: R, dur: dur });
+
+    var base = p.damage * 2.4 * burstMul * (1 + p.skillDmg);
+    var stun = this.setFlag('domainStun') ? Number(this.setFlag('domainStun')) : 0;
+    for (var i = 0; i < this.enemies.length; i++) {
+      var e = this.enemies[i];
+      if (e.dying > 0) continue;
+      var d = dist(p.x, p.y, e.x, e.y);
+      if (d > R + e.r) continue;
+      var ang = Math.atan2(e.y - p.y, e.x - p.x);
+      var dealt = this.damageEnemy(e, base * (1 - 0.25 * (d / (R + e.r))), {
+        knock: 220, knockAngle: ang, stun: stun || (e.boss ? 0.1 : 0.25)
+      });
+      this.applyLifesteal(dealt * 0.35);
+      e.domainSlow = Math.max(e.domainSlow || 0, dur);
+    }
+    return true;
+  };
+
+  World.prototype.updateDomain = function (dt) {
+    var p = this.player;
+    if (p.domainT > 0) {
+      p.domainT = Math.max(0, p.domainT - dt);
+      if (this.setFlag('domainMove') && p.domainT > 0) {
+        // 领域内移速加成在 updatePlayer 里叠到 speedBuff 的并行通道
+        p.domainMoveMul = 1 + Number(this.setFlag('domainMove'));
+      } else {
+        p.domainMoveMul = 1;
+      }
+      // 领域氛围粒子
+      if (p.domainT > 0 && this.rng() < dt * 8) {
+        var a = this.rng() * TAU, rad = this.rng.range(20, p.domainR);
+        this.fx.push({
+          t: 'p',
+          x: p.x + Math.cos(a) * rad, y: p.y + Math.sin(a) * rad,
+          vx: this.rng.range(-20, 20), vy: this.rng.range(-30, -5),
+          dur: 0.45, life: 0.45, color: '#c07bff', size: 2.8
+        });
+      }
+    } else {
+      p.domainMoveMul = 1;
+      p.domainR = 0;
+    }
+    for (var i = 0; i < this.enemies.length; i++) {
+      var e = this.enemies[i];
+      if (e.domainSlow > 0) e.domainSlow = Math.max(0, e.domainSlow - dt);
+    }
+  };
+
   /* ------------------------------------------------------------------ 更新 */
   World.prototype.update = function (dt, input) {
     if (this.dead) { this.updateVisuals(dt); return; }
@@ -1125,6 +1227,7 @@
     p.blessCd = Math.max(0, p.blessCd - dt);
     p.useCd = Math.max(0, p.useCd - dt);
     p.dashCd = Math.max(0, p.dashCd - dt);
+    p.weaponSkillCd = Math.max(0, p.weaponSkillCd - dt);
     p.swingT = Math.max(0, p.swingT - dt);
     p.invuln = Math.max(0, p.invuln - dt);
     p.hurtFlash = Math.max(0, p.hurtFlash - dt);
@@ -1132,6 +1235,7 @@
     if (p.dmgBuffT > 0) p.dmgBuffT -= dt;
     if (p.speedBuffT > 0) p.speedBuffT -= dt;
     if (p.regen > 0 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + p.regen * dt);
+    this.updateDomain(dt);
 
     var mx = input.mx || 0, my = input.my || 0;
     var ml = SP.len(mx, my);
@@ -1147,7 +1251,7 @@
       p.vy = Math.sin(p.dashDir) * dsp;
       this.fx.push({ t: 'p', x: p.x, y: p.y, vx: 0, vy: 0, dur: 0.22, life: 0.22, color: '#a8f0ff', size: 5 });
     } else {
-      var spd = p.speed * (p.speedBuffT > 0 ? 1.3 : 1) * (p.swingT > 0 ? 0.74 : 1);
+      var spd = p.speed * (p.speedBuffT > 0 ? 1.3 : 1) * (p.domainMoveMul || 1) * (p.swingT > 0 ? 0.74 : 1);
       p.vx = SP.lerp(p.vx, mx * spd, Math.min(1, dt * 16));
       p.vy = SP.lerp(p.vy, my * spd, Math.min(1, dt * 16));
       if (input.dash && (ml > 0.05 || aim !== undefined)) {
@@ -1170,6 +1274,7 @@
     if (input.quake) this.castQuake();
     if (input.bless) this.castBless();
     if (input.use) this.useSteak();
+    if (input.weaponSkill) this.castWeaponSkill();
   };
 
   World.prototype.updateEnemies = function (dt) {
@@ -1267,6 +1372,11 @@
         }
       }
 
+      // 领域减速：初绽挂上的 domainSlow，或仍站在领域圈内
+      var inDomain = p.domainT > 0 && d <= p.domainR + e.r;
+      if ((e.domainSlow > 0 || inDomain) && e.state !== 'dash') {
+        ax *= 0.45; ay *= 0.45;
+      }
       e.vx = SP.lerp(e.vx, ax, Math.min(1, dt * 7));
       e.vy = SP.lerp(e.vy, ay, Math.min(1, dt * 7));
       e.x += e.vx * dt;
@@ -1431,7 +1541,14 @@
       quake: { left: p.quakeCd, total: 8 * (1 - p.cdr) * (this.hasUnique('overcharge') ? 0.75 : 1) },
       bless: { left: p.blessCd, total: 18 * (1 - p.cdr) },
       dash: { left: p.dashCd, total: 3 * (1 - p.cdr) * (this.hasUnique('swift') ? 0.5 : 1) },
-      steak: { left: p.useCd, total: 6 }
+      steak: { left: p.useCd, total: 6 },
+      weapon: {
+        left: p.weaponSkillCd,
+        total: 7.5 * (1 - p.cdr),
+        marks: p.curseMarks || 0,
+        maxMarks: p.curseMarkMax || 5,
+        ready: this.hasUnique('domaincut')
+      }
     };
   };
 

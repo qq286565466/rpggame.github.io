@@ -22,6 +22,7 @@
   var hideoutTarget = null;   // 点击 NPC 后的自动走近目标
   var input = {
     mx: 0, my: 0, attack: false, quake: false, bless: false, use: false, dash: false,
+    weaponSkill: false,
     aimAngle: 0, hasMouse: false, mouseX: 0, mouseY: 0
   };
   var keys = {};
@@ -115,6 +116,7 @@
     pulse('slotBless', 'bless');
     pulse('slotDash', 'dash');
     pulse('slotSteak', 'use');
+    pulse('slotWeapon', 'weaponSkill');
   }
 
   function bindInput() {
@@ -187,6 +189,7 @@
         if (k === 'q') input.quake = true;
         if (k === 'e') input.bless = true;
         if (k === '1') input.use = true;
+        if (k === '2') input.weaponSkill = true;
         if (k === ' ' || k === 'shift') input.dash = true;
       }
       if (k === 'r' && ui.screen === 'game') setAutoAtk(!autoAtk);
@@ -375,9 +378,11 @@
       aimSnap: autoLock,
       attack: input.attack || autoLock,
       quake: input.quake, bless: input.bless, use: input.use, dash: input.dash,
+      weaponSkill: input.weaponSkill,
       viewW: renderer ? renderer.w : 0, viewH: renderer ? renderer.h : 0
     };
     input.quake = input.bless = input.use = input.dash = false;
+    input.weaponSkill = false;
     return out;
   }
 
@@ -426,6 +431,7 @@
         case 'hurt': sound.play('hurt'); break;
         case 'quake': sound.play('quake'); break;
         case 'bless': sound.play('bless'); break;
+        case 'domain': sound.play('quake'); break;
         case 'dash': sound.play('spit'); break;
         case 'steak': sound.play('steak'); break;
         case 'pickup':
@@ -484,6 +490,7 @@
     paused = false;
     running = true;
     input.attack = false; input.quake = false; input.bless = false; input.use = false; input.dash = false;
+    input.weaponSkill = false;
     autoLock = false;
     autoAim = false;
   }
@@ -614,7 +621,26 @@
       /* 默认让机器人接管操作，画面稳定可复现；#dev-over 需要真实结算所以交还给玩家 */
       demo = hash !== 'dev-over';
 
-      if (hash.indexOf('dev-hub') === 0) {
+      if (hash === 'dev-oath') {
+        /* 缚誓远征演示：满套装 + 裁刃，直接进营地 1 层，可按 2 开领域 */
+        var oathCh = SP.Accounts.current.character;
+        oathCh.level = 22;
+        oathCh.coins = 5000; oathCh.stones = 80;
+        oathCh.materials.up = 120; oathCh.materials.re = 40; oathCh.steaks = 5;
+        var oathRng = SP.makeRng(20261009);
+        ['oathblade', 'oathhelm', 'oathplate', 'oathboots', 'oathamulet', 'oathring'].forEach(function (bk) {
+          var piece = SP.Items.makeSetPiece(oathRng, 'oath', { ilvl: 22, baseKey: bk });
+          if (piece) {
+            SP.Items.equipInto(oathCh, piece);
+            P.discoverGear(oathCh, piece);
+          }
+        });
+        ui.enterHub();
+        startRun('camp', 1);
+        demo = false;
+        world.player.curseMarks = 5;
+        world.player.invuln = 8;
+      } else if (hash.indexOf('dev-hub') === 0) {
         var hubCh = SP.Accounts.current.character;
         devGear(hubCh, 26, 26);
         // 背包里放几件不同品质的装备，便于核对背包与悬浮提示

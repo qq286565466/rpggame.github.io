@@ -545,6 +545,25 @@
     return { ok: true, cost: cost, steaks: ch.steaks };
   }
 
+  /** 缚誓远征匣：随机一件联动套装部件（传说） */
+  var OATH_COST = 8;
+  var OATH_WEAPON_COST = 12;
+  function buyOathPiece(ch, ilvl, preferWeapon) {
+    var cost = preferWeapon ? OATH_WEAPON_COST : OATH_COST;
+    if (ch.stones < cost) return { ok: false, reason: 'alpha-stone 不足（需要 ' + cost + '）' };
+    if (ch.inventory.length >= INVENTORY_CAP) return { ok: false, reason: '背包已满' };
+    var rng = SP.makeRng((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0);
+    var item = I.makeSetPiece(rng, 'oath', {
+      ilvl: Math.max(1, Math.round(ilvl || 20)),
+      baseKey: preferWeapon ? 'oathblade' : undefined
+    });
+    if (!item) return { ok: false, reason: '套装部件生成失败' };
+    ch.stones -= cost;
+    ch.inventory.push(item);
+    discoverGear(ch, item);
+    return { ok: true, item: item, cost: cost };
+  }
+
   /** 用秘宝向神秘商人换一件随机高品质装备（保底精良） */
   var MYSTERY_COST = 6;
   function buyMysteryItem(ch, ilvl, slot) {
@@ -693,6 +712,8 @@
     UNLOCK_REQ: UNLOCK_REQ,
     STEAK_PRICE: STEAK_PRICE,
     MYSTERY_COST: MYSTERY_COST,
+    OATH_COST: OATH_COST,
+    OATH_WEAPON_COST: OATH_WEAPON_COST,
     MAX_LEVEL_HINT: MAX_LEVEL_HINT,
     newCharacter: newCharacter,
     migrateV1: migrateV1,
@@ -726,6 +747,7 @@
     buyMaterial: buyMaterial,
     matCoinPrice: matCoinPrice,
     buyMysteryItem: buyMysteryItem,
+    buyOathPiece: buyOathPiece,
     mergeBestiary: mergeBestiary,
     isDiscovered: isDiscovered,
     bestiaryProgress: bestiaryProgress,
