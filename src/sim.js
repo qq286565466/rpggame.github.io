@@ -121,6 +121,38 @@
 
   function xpForLevel(lv) { return Math.round(42 + lv * 26 + lv * lv * 2.2); }
 
+  /** 由角色存档派生战斗实体（支持多人联机） */
+  function makeCombatant(character, meta) {
+    meta = meta || {};
+    var stats = deriveCharacter(character);
+    var wpn = stats.weapon || SP.Items.weaponProfile(null);
+    return {
+      id: meta.id || 'local',
+      name: meta.name || '旅人',
+      x: meta.x || 0, y: meta.y || 0, vx: 0, vy: 0, r: 18, facing: -Math.PI / 2,
+      damage: stats.damage, maxHp: stats.maxHp, hp: stats.maxHp,
+      speed: stats.speed, attackSpeed: stats.attackSpeed,
+      range: wpn.range, arcWidth: wpn.arc, weapon: wpn,
+      crit: stats.crit, critMult: stats.critMult,
+      armor: stats.armor, lifesteal: stats.lifesteal, regen: stats.regen,
+      thorns: stats.thorns, magnet: stats.magnet, greed: stats.greed,
+      luck: stats.luck, skillDmg: stats.skillDmg, cdr: stats.cdr,
+      uniques: stats.uniques,
+      atkCd: 0, swingT: 0, swingDir: 0,
+      quakeCd: 0, blessCd: 0, useCd: 0, dashCd: 0, dashT: 0, dashDir: 0,
+      weaponSkillCd: 0,
+      shield: 0, shieldT: 0, dmgBuffT: 0, dmgBuffMul: 1,
+      speedBuffT: 0, invuln: 0, hurtFlash: 0, walkPhase: 0,
+      killStreak: 0, level: stats.level,
+      curseMarks: 0, curseMarkMax: 5,
+      domainT: 0, domainR: 0, domainDmgMul: 1,
+      setFlags: stats.setFlags || {},
+      sets: stats.sets || null,
+      character: character || null,
+      coins: 0, stones: 0, upStones: 0, reStones: 0, loot: []
+    };
+  }
+
   /**
    * 由 角色等级 + 已装备物品 推导出实际战斗属性。
    * character: { level, equipped:{...}, }
@@ -252,34 +284,29 @@
     this.mlvl = this.biome.mlvlBase + (this.floor - 1);
     this.arena = this.biome.arena;
 
-    var stats = deriveCharacter(opts.character);
     this.character = opts.character || null;
-    this.stats = stats;
-
-    var wpn = stats.weapon || SP.Items.weaponProfile(null);
-    var p = this.player = {
-      x: 0, y: 0, vx: 0, vy: 0, r: 18, facing: -Math.PI / 2,
-      damage: stats.damage, maxHp: stats.maxHp, hp: stats.maxHp,
-      speed: stats.speed, attackSpeed: stats.attackSpeed,
-      range: wpn.range, arcWidth: wpn.arc, weapon: wpn,
-      crit: stats.crit, critMult: stats.critMult,
-      armor: stats.armor, lifesteal: stats.lifesteal, regen: stats.regen,
-      thorns: stats.thorns, magnet: stats.magnet, greed: stats.greed,
-      luck: stats.luck, skillDmg: stats.skillDmg, cdr: stats.cdr,
-      uniques: stats.uniques,
-      atkCd: 0, swingT: 0, swingDir: 0,
-      quakeCd: 0, blessCd: 0, useCd: 0, dashCd: 0, dashT: 0, dashDir: 0,
-      weaponSkillCd: 0,
-      shield: 0, shieldT: 0, dmgBuffT: 0, dmgBuffMul: 1,
-      speedBuffT: 0, invuln: 0, hurtFlash: 0, walkPhase: 0,
-      killStreak: 0, level: stats.level,
-      curseMarks: 0, curseMarkMax: 5,
-      domainT: 0, domainR: 0, domainDmgMul: 1,
-      setFlags: stats.setFlags || {},
-      sets: stats.sets || null
-    };
-    this.hasUnique = function (k) { return p.uniques.indexOf(k) >= 0; };
-    this.setFlag = function (k) { return p.setFlags && p.setFlags[k]; };
+    var roster = opts.party && opts.party.length
+      ? opts.party
+      : [{ id: opts.localId || 'local', name: opts.name || '旅人', character: opts.character }];
+    this.localId = opts.localId || roster[0].id || 'local';
+    this.players = [];
+    for (var pi = 0; pi < roster.length; pi++) {
+      var slot = roster[pi];
+      var ent = makeCombatant(slot.character, {
+        id: slot.id || ('p' + pi),
+        name: slot.name || ('旅人' + (pi + 1)),
+        x: Math.cos((pi / Math.max(1, roster.length)) * TAU) * 36,
+        y: Math.sin((pi / Math.max(1, roster.length)) * TAU) * 36
+      });
+      this.players.push(ent);
+    }
+    this.player = this.players[0];
+    for (var pj = 0; pj < this.players.length; pj++) {
+      if (this.players[pj].id === this.localId) { this.player = this.players[pj]; break; }
+    }
+    this.stats = deriveCharacter((roster[0] && roster[0].character) || opts.character);
+    this.bindActor(this.player);
+    this.partyScale = 1 + 0.45 * Math.max(0, this.players.length - 1);
 
     this.obstacles = buildObstacles(this.rng, this.biome);
     this.decals = [];
@@ -318,8 +345,9 @@
     this.xpGained = 0;
     this.levelsGained = 0;
 
-    // 副本推进：击杀配额 → 首领 → 通关
-    this.killsNeeded = Math.min(60, 14 + this.floor * 3);
+    // 副本推进：击杀配额 → 首领 → 通关（组队略增配额与场上怪数）
+    var partyN = Math.max(0, this.players.length - 1);
+    this.killsNeeded = Math.min(80, Math.round((14 + this.floor * 3) * (1 + 0.25 * partyN)));
     this.boss = null;
     this.bossSpawned = false;
     this.cleared = false;
@@ -329,7 +357,7 @@
     this.stats_damageTaken = 0;
     this.spawnTimer = 1.2;
     // 场上同时存在的怪越多，越逼玩家走位而不是站桩
-    this.aliveTarget = 8 + Math.min(12, Math.floor(this.floor / 1.2));
+    this.aliveTarget = 8 + Math.min(12, Math.floor(this.floor / 1.2)) + partyN * 2;
     this.hazards = [];
     this.hazardTimer = 2.2;
     this.sporeTick = 0;
@@ -348,6 +376,45 @@
 
   World.prototype.emit = function (type, data) { this.events.push({ type: type, data: data || null, t: this.time }); };
   World.prototype.drainEvents = function () { var e = this.events; this.events = []; return e; };
+
+  /** 把技能/独特效果上下文绑到指定战斗员（多人时切换） */
+  World.prototype.bindActor = function (p) {
+    this.player = p;
+    var self = this;
+    this.hasUnique = function (k) { return p && p.uniques && p.uniques.indexOf(k) >= 0; };
+    this.setFlag = function (k) { return p && p.setFlags && p.setFlags[k]; };
+    void self;
+  };
+
+  World.prototype.livingPlayers = function () {
+    var out = [];
+    for (var i = 0; i < this.players.length; i++) {
+      if (this.players[i].hp > 0) out.push(this.players[i]);
+    }
+    return out;
+  };
+
+  World.prototype.nearestLivingPlayer = function (x, y) {
+    var best = null, bd = Infinity;
+    for (var i = 0; i < this.players.length; i++) {
+      var p = this.players[i];
+      if (p.hp <= 0) continue;
+      var d = dist(x, y, p.x, p.y);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  };
+
+  World.prototype.focusLocal = function () {
+    for (var i = 0; i < this.players.length; i++) {
+      if (this.players[i].id === this.localId) {
+        this.bindActor(this.players[i]);
+        return this.player;
+      }
+    }
+    if (this.players[0]) this.bindActor(this.players[0]);
+    return this.player;
+  };
 
   /* ------------------------------------------------------------- 几何与碰撞 */
   function pushOutOfObstacles(w, ent) {
@@ -457,13 +524,13 @@
       y = clamp(p.y + Math.sin(a) * rad, -this.arena + 40, this.arena - 40);
       if (!blocked(this, x, y, def.radius)) ok = true;
     }
-    var hpMul = (def.boss ? this.bossHpMul() : sc.hp) * (elite ? 2.8 : 1);
+    var hpMul = (def.boss ? this.bossHpMul() : sc.hp) * (elite ? 2.8 : 1) * (this.partyScale || 1);
     var e = {
       key: key, name: (elite ? '精英·' : '') + def.name, kind: def.kind, family: def.family || 'beast',
       x: x, y: y, vx: 0, vy: 0, r: def.radius * (elite ? 1.22 : 1),
       hp: def.hp * hpMul, maxHp: def.hp * hpMul,
       speed: def.speed * sc.speed * (elite ? 0.92 : 1),
-      dmg: def.dmg * sc.dmg * (elite ? 1.45 : 1),
+      dmg: def.dmg * sc.dmg * (elite ? 1.45 : 1) * Math.sqrt(this.partyScale || 1),
       atkCd: def.atkCd * this.rng.range(0.7, 1.2), atkRange: def.atkRange,
       xp: def.xp * (1 + 0.55 * this.mlvl) * (elite ? 2.5 : 1),
       coin: def.coin * (elite ? 4 : 1),
@@ -539,15 +606,19 @@
       this.sporeTick += dt;
       if (this.sporeTick >= 0.55) {
         this.sporeTick = 0;
-        var moving = SP.len(p.vx, p.vy) > 55;
-        var dps = (2.2 + this.mlvl * 0.55) * (moving ? 0.32 : 1);
-        this.hurtPlayer(dps * 0.55, p.x, p.y, { soft: true });
-        if (!moving) {
-          this.fx.push({
-            t: 'p', x: p.x + this.rng.range(-18, 18), y: p.y + this.rng.range(-18, 18),
-            vx: this.rng.range(-20, 20), vy: this.rng.range(-40, -10),
-            dur: 0.5, life: 0.5, color: '#7dce86', size: 3.2
-          });
+        var livingSp = this.livingPlayers();
+        for (var si = 0; si < livingSp.length; si++) {
+          var sp = livingSp[si];
+          var moving = SP.len(sp.vx, sp.vy) > 55;
+          var dps = (2.2 + this.mlvl * 0.55) * (moving ? 0.32 : 1);
+          this.hurtPlayer(dps * 0.55, sp.x, sp.y, { soft: true, target: sp });
+          if (!moving) {
+            this.fx.push({
+              t: 'p', x: sp.x + this.rng.range(-18, 18), y: sp.y + this.rng.range(-18, 18),
+              vx: this.rng.range(-20, 20), vy: this.rng.range(-40, -10),
+              dur: 0.5, life: 0.5, color: '#7dce86', size: 3.2
+            });
+          }
         }
       }
     }
@@ -556,10 +627,11 @@
       this.hazardTimer -= dt;
       if (this.hazardTimer <= 0) {
         this.hazardTimer = Math.max(1.35, 3.1 - this.floor * 0.06);
+        var focus = this.nearestLivingPlayer(0, 0) || p;
         var a = this.rng() * TAU;
         var rad = this.rng.range(30, 240);
-        var hx = clamp(p.x + Math.cos(a) * rad, -this.arena + 40, this.arena - 40);
-        var hy = clamp(p.y + Math.sin(a) * rad, -this.arena + 40, this.arena - 40);
+        var hx = clamp(focus.x + Math.cos(a) * rad, -this.arena + 40, this.arena - 40);
+        var hy = clamp(focus.y + Math.sin(a) * rad, -this.arena + 40, this.arena - 40);
         this.hazards.push({
           kind: 'crystal',
           x: hx, y: hy,
@@ -578,8 +650,11 @@
       this.ring(hz.x, hz.y, 10, hz.r, 0.35, '#7eb6e8', 5);
       this.burst(hz.x, hz.y, 14, '#a8e0ff', 160, 0.4, 2.8);
       this.shake = Math.max(this.shake, 5);
-      if (dist(hz.x, hz.y, p.x, p.y) < hz.r + p.r) {
-        this.hurtPlayer(hz.dmg, hz.x, hz.y);
+      var livingHz = this.livingPlayers();
+      for (var hi = 0; hi < livingHz.length; hi++) {
+        if (dist(hz.x, hz.y, livingHz[hi].x, livingHz[hi].y) < hz.r + livingHz[hi].r) {
+          this.hurtPlayer(hz.dmg, hz.x, hz.y, { target: livingHz[hi] });
+        }
       }
       this.hazards.splice(i, 1);
     }
@@ -627,9 +702,12 @@
       var bias = (e.boss ? 0.35 : 0) + (e.elite ? 0.15 : 0) + this.floor * 0.012;
       var item = SP.Items.roll(this.rng, { ilvl: ilvl, rarityBias: bias, luck: p.luck });
       if (e.boss && i === 0) {
-        var idx = SP.Items.RARITY_BY_KEY[item.rarity].index;
-        if (idx < 2) {
-          item = SP.Items.roll(this.rng, { ilvl: ilvl, rarityBias: bias + 1.6, luck: p.luck });
+        var guard = 0;
+        while (SP.Items.RARITY_BY_KEY[item.rarity].index < 2 && guard < 16) {
+          item = SP.Items.roll(this.rng, {
+            ilvl: ilvl, rarityBias: bias + 1.8 + guard * 0.55, luck: p.luck
+          });
+          guard++;
         }
       }
       this.pickups.push({
@@ -758,9 +836,12 @@
   World.prototype.hurtPlayer = function (amount, srcX, srcY, opts) {
     opts = opts || {};
     var soft = !!opts.soft;
-    var p = this.player;
+    var p = opts.target || this.player;
+    if (!p || p.hp <= 0) return 0;
     if (this.dead) return 0;
     if (!soft && p.invuln > 0) return 0;
+    var prev = this.player;
+    this.bindActor(p);
     var reduced = amount * (1 - armorReduction(p.armor, this.mlvl));
     if (p.shield > 0) {
       var absorbed = Math.min(p.shield, reduced);
@@ -790,17 +871,22 @@
     } else {
       p.hurtFlash = Math.max(p.hurtFlash, 0.1);
     }
-    this.emit('hurt', { amount: reduced, soft: soft });
-    if (p.hp <= 0) this.die();
+    this.emit('hurt', { amount: reduced, soft: soft, id: p.id });
+    if (p.hp <= 0) {
+      this.addText(p.x, p.y - 50, (p.name || '旅人') + ' 倒下', '#ff9ec4', 16, -20);
+      if (this.livingPlayers().length === 0) this.die();
+    }
+    if (prev) this.bindActor(prev);
+    else this.focusLocal();
     return reduced;
   };
 
   World.prototype.die = function () {
     if (this.dead) return;
     this.dead = true;
-    this.player.hp = 0;
     this.shake = 22;
-    this.burst(this.player.x, this.player.y, 40, '#ff9ec4', 240, 0.9, 4);
+    var focus = this.focusLocal() || this.players[0];
+    if (focus) this.burst(focus.x, focus.y, 40, '#ff9ec4', 240, 0.9, 4);
     this.deathStats = this.summary();
     this.emit('death', this.deathStats);
   };
@@ -1178,6 +1264,10 @@
   };
 
   /* ------------------------------------------------------------------ 更新 */
+  /**
+   * input 可为单人输入对象，或多人 { [playerId]: input }。
+   * 联机房主传入后者；单机保持原用法。
+   */
   World.prototype.update = function (dt, input) {
     if (this.dead) { this.updateVisuals(dt); return; }
     input = input || {};
@@ -1186,28 +1276,42 @@
     this.time += dt;
     if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) this.combo = 0; }
 
+    var multi = !!(input && input.__multi);
+    var byId = multi ? input : null;
+    var localInput = multi ? (input[this.localId] || {}) : input;
+
     this.updateSpawns(dt);
-    this.updatePlayer(dt, input);
+    if (multi) {
+      for (var i = 0; i < this.players.length; i++) {
+        var act = this.players[i];
+        if (act.hp <= 0) continue;
+        this.bindActor(act);
+        this.updatePlayer(dt, byId[act.id] || {});
+      }
+      this.focusLocal();
+    } else {
+      this.updatePlayer(dt, input);
+    }
     this.updateEnemies(dt);
     this.updateProjectiles(dt);
     this.updateHazards(dt);
     this.updatePickups(dt);
     this.updateVisuals(dt);
 
-    // 相机跟随，并朝瞄准方向做轻微前瞻
+    // 相机跟随本地玩家
     var cam = this.camera;
-    var ax = (input.aimX !== undefined) ? input.aimX - this.player.x : 0;
-    var ay = (input.aimY !== undefined) ? input.aimY - this.player.y : 0;
+    var focus = this.focusLocal();
+    var ax = (localInput.aimX !== undefined) ? localInput.aimX - focus.x : 0;
+    var ay = (localInput.aimY !== undefined) ? localInput.aimY - focus.y : 0;
     var ll = SP.len(ax, ay) || 1;
     ax = ax / ll * Math.min(90, ll * 0.28);
     ay = ay / ll * Math.min(90, ll * 0.28);
-    cam.x = SP.lerp(cam.x, this.player.x + ax, Math.min(1, dt * 7));
-    cam.y = SP.lerp(cam.y, this.player.y + ay, Math.min(1, dt * 7));
+    cam.x = SP.lerp(cam.x, focus.x + ax, Math.min(1, dt * 7));
+    cam.y = SP.lerp(cam.y, focus.y + ay, Math.min(1, dt * 7));
 
-    // 相机夹在副本范围内：否则贴墙时会把地图外的「虚空」露出来
-    if (input.viewW && input.viewH) {
-      var limX = Math.max(0, this.arena - input.viewW / 2);
-      var limY = Math.max(0, this.arena - input.viewH / 2);
+    if (localInput.viewW && localInput.viewH) {
+      var limX = Math.max(0, this.arena - localInput.viewW / 2);
+      var limY = Math.max(0, this.arena - localInput.viewH / 2);
       cam.x = clamp(cam.x, -limX, limX);
       cam.y = clamp(cam.y, -limY, limY);
     }
@@ -1222,6 +1326,7 @@
 
   World.prototype.updatePlayer = function (dt, input) {
     var p = this.player;
+    if (!p || p.hp <= 0) return;
     p.atkCd = Math.max(0, p.atkCd - dt);
     p.quakeCd = Math.max(0, p.quakeCd - dt);
     p.blessCd = Math.max(0, p.blessCd - dt);
@@ -1278,7 +1383,7 @@
   };
 
   World.prototype.updateEnemies = function (dt) {
-    var p = this.player, i, j, e, list = this.enemies;
+    var i, j, e, list = this.enemies;
 
     for (i = list.length - 1; i >= 0; i--) {
       if (list[i].dying > 0) {
@@ -1299,6 +1404,8 @@
         clampArena(this, e);
         continue;
       }
+      var p = this.nearestLivingPlayer(e.x, e.y) || this.player;
+      if (!p) continue;
       var dx = p.x - e.x, dy = p.y - e.y;
       var d = Math.sqrt(dx * dx + dy * dy) || 1;
       var ux = dx / d, uy = dy / d;
@@ -1311,7 +1418,7 @@
           e.atkCd -= dt;
           if (e.atkCd <= 0) {
             e.atkCd = def.atkCd * this.rng.range(0.85, 1.15);
-            this.hurtPlayer(e.dmg, e.x, e.y);
+            this.hurtPlayer(e.dmg, e.x, e.y, { target: p });
             this.burst(p.x, p.y, 5, '#ff8080', 120, 0.25, 2.5);
           }
         }
@@ -1327,7 +1434,7 @@
         } else if (e.state === 'dash') {
           ax = Math.cos(e.chargeDir) * 540; ay = Math.sin(e.chargeDir) * 540;
           this.fx.push({ t: 'p', x: e.x, y: e.y, vx: 0, vy: 0, dur: 0.25, life: 0.25, color: e.color, size: 5 });
-          if (!e.didHit && d < e.r + p.r + 12) { e.didHit = true; this.hurtPlayer(e.dmg, e.x, e.y); }
+          if (!e.didHit && d < e.r + p.r + 12) { e.didHit = true; this.hurtPlayer(e.dmg, e.x, e.y, { target: p }); }
           if (e.stateT <= 0) { e.state = 'idle'; e.stateT = this.rng.range(0.6, 1.2); }
         }
       } else if (e.kind === 'ranged') {
@@ -1350,7 +1457,12 @@
             e.state = 'idle';
             this.ring(e.x, e.y, 20, e.slamR, 0.4, '#ff9c5b', 9);
             this.shake = Math.max(this.shake, 13);
-            if (dist(e.x, e.y, p.x, p.y) < e.slamR + p.r) this.hurtPlayer(e.dmg, e.x, e.y);
+            var living = this.livingPlayers();
+            for (var bi = 0; bi < living.length; bi++) {
+              if (dist(e.x, e.y, living[bi].x, living[bi].y) < e.slamR + living[bi].r) {
+                this.hurtPlayer(e.dmg, e.x, e.y, { target: living[bi] });
+              }
+            }
             this.burst(e.x, e.y, 20, '#ff9c5b', 200, 0.6, 3.5);
           }
         } else if (e.slamCd <= 0 && d < 230) {
@@ -1454,10 +1566,17 @@
           pr.pierce = (pr.pierce || 1) - 1;
           if (pr.pierce <= 0) { hit = true; break; }
         }
-      } else if (SP.dist(pr.x, pr.y, p.x, p.y) < pr.r + p.r) {
-        this.hurtPlayer(pr.dmg, pr.x, pr.y);
-        this.burst(pr.x, pr.y, 8, pr.color, 130, 0.35, 3);
-        hit = true;
+      } else {
+        var victims = this.livingPlayers();
+        for (var vi = 0; vi < victims.length; vi++) {
+          var vp = victims[vi];
+          if (SP.dist(pr.x, pr.y, vp.x, vp.y) < pr.r + vp.r) {
+            this.hurtPlayer(pr.dmg, pr.x, pr.y, { target: vp });
+            this.burst(pr.x, pr.y, 8, pr.color, 130, 0.35, 3);
+            hit = true;
+            break;
+          }
+        }
       }
       if (!hit && blocked(this, pr.x, pr.y, pr.r * 0.4)) {
         this.burst(pr.x, pr.y, 6, pr.color, 100, 0.3, 2.6);
@@ -1470,11 +1589,15 @@
   };
 
   World.prototype.updatePickups = function (dt) {
-    var p = this.player;
     for (var i = this.pickups.length - 1; i >= 0; i--) {
       var k = this.pickups[i];
       k.life -= dt;
       k.bob += dt * 4;
+      var p = this.nearestLivingPlayer(k.x, k.y) || this.player;
+      if (!p) {
+        if (k.life <= 0) this.pickups.splice(i, 1);
+        continue;
+      }
       var d = SP.dist(k.x, k.y, p.x, p.y);
       if (d < p.magnet && k.life > 0.2) {
         var pull = (1 - d / p.magnet) * 520 + 90;
@@ -1485,27 +1608,32 @@
       if (d < p.r + k.r) {
         if (k.kind === 'coin') {
           this.coins += k.value;
+          p.coins = (p.coins || 0) + k.value;
           this.addText(p.x, p.y - 30, '+' + k.value, '#ffd75e', 14, -40);
         } else if (k.kind === 'alpha') {
           this.stones += k.value;
+          p.stones = (p.stones || 0) + k.value;
           this.addText(p.x, p.y - 30, '+1 alpha-stone', '#a8e6ff', 15, -40);
           this.burst(k.x, k.y, 10, '#a8e6ff', 140, 0.5, 3);
         } else if (k.kind === 'upstone') {
           this.upStones += k.value;
+          p.upStones = (p.upStones || 0) + k.value;
           this.addText(p.x, p.y - 30, '+' + k.value + ' 强化石', '#ffb27a', 14, -40);
         } else if (k.kind === 'restone') {
           this.reStones += k.value;
+          p.reStones = (p.reStones || 0) + k.value;
           this.addText(p.x, p.y - 30, '+' + k.value + ' 重铸石', '#c9a6ff', 14, -40);
         } else if (k.kind === 'item') {
           this.loot.push(k.item);
-          this.emit('loot', { item: k.item });
+          p.loot.push(k.item);
+          this.emit('loot', { item: k.item, id: p.id });
         } else if (k.kind === 'steak') {
           if (this.steaks < 9) {
             this.steaks++;
             this.addText(p.x, p.y - 30, '牛排 +1', '#ffc48f', 15, -40);
           } else { p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.1); }
         }
-        this.emit('pickup', { kind: k.kind });
+        this.emit('pickup', { kind: k.kind, id: p.id });
         this.pickups.splice(i, 1);
         continue;
       }
@@ -1577,11 +1705,101 @@
     };
   }
 
+  /** 房主权威：压缩快照供同伴渲染 */
+  World.prototype.snapshot = function () {
+    var players = [];
+    for (var i = 0; i < this.players.length; i++) {
+      var p = this.players[i];
+      players.push({
+        id: p.id, name: p.name, x: p.x, y: p.y, vx: p.vx, vy: p.vy,
+        facing: p.facing, hp: p.hp, maxHp: p.maxHp, walkPhase: p.walkPhase,
+        swingT: p.swingT, swingDir: p.swingDir, hurtFlash: p.hurtFlash,
+        shield: p.shield, domainT: p.domainT, domainR: p.domainR,
+        curseMarks: p.curseMarks, level: p.level
+      });
+    }
+    var enemies = [];
+    for (var e = 0; e < this.enemies.length; e++) {
+      var en = this.enemies[e];
+      enemies.push({
+        key: en.key, x: en.x, y: en.y, hp: en.hp, maxHp: en.maxHp,
+        r: en.r, color: en.color, boss: en.boss, elite: en.elite,
+        dying: en.dying, spawnT: en.spawnT, state: en.state, stateT: en.stateT,
+        hitFlash: en.hitFlash, stun: en.stun, anim: en.anim,
+        slamR: en.slamR, chargeDir: en.chargeDir
+      });
+    }
+    var pickups = [];
+    for (var k = 0; k < this.pickups.length; k++) {
+      var pk = this.pickups[k];
+      pickups.push({
+        x: pk.x, y: pk.y, kind: pk.kind, r: pk.r, bob: pk.bob, life: pk.life,
+        value: pk.value, item: pk.item || null
+      });
+    }
+    return {
+      time: this.time, kills: this.kills, killsNeeded: this.killsNeeded,
+      coins: this.coins, stones: this.stones, steaks: this.steaks,
+      bossSpawned: this.bossSpawned, cleared: this.cleared, dead: this.dead,
+      players: players, enemies: enemies, pickups: pickups,
+      camera: { x: this.camera.x, y: this.camera.y }
+    };
+  };
+
+  World.prototype.applySnapshot = function (snap) {
+    if (!snap) return;
+    this.time = snap.time;
+    this.kills = snap.kills;
+    this.killsNeeded = snap.killsNeeded;
+    this.coins = snap.coins;
+    this.stones = snap.stones;
+    this.steaks = snap.steaks;
+    this.bossSpawned = snap.bossSpawned;
+    this.cleared = snap.cleared;
+    this.dead = snap.dead;
+    // 不覆盖相机：客机跟随本地角色，房主自己算
+    var byId = {};
+    for (var i = 0; i < this.players.length; i++) byId[this.players[i].id] = this.players[i];
+    (snap.players || []).forEach(function (sp) {
+      var p = byId[sp.id];
+      if (!p) return;
+      p.x = sp.x; p.y = sp.y; p.vx = sp.vx; p.vy = sp.vy;
+      p.facing = sp.facing; p.hp = sp.hp; p.maxHp = sp.maxHp;
+      p.walkPhase = sp.walkPhase; p.swingT = sp.swingT; p.swingDir = sp.swingDir;
+      p.hurtFlash = sp.hurtFlash; p.shield = sp.shield;
+      p.domainT = sp.domainT; p.domainR = sp.domainR;
+      p.curseMarks = sp.curseMarks;
+    });
+    this.enemies = (snap.enemies || []).map(function (en) {
+      return {
+        key: en.key, name: (ENEMY_TYPES[en.key] && ENEMY_TYPES[en.key].name) || en.key,
+        kind: (ENEMY_TYPES[en.key] && ENEMY_TYPES[en.key].kind) || 'melee',
+        x: en.x, y: en.y, hp: en.hp, maxHp: en.maxHp, r: en.r, color: en.color,
+        boss: en.boss, elite: en.elite, dying: en.dying || 0, spawnT: en.spawnT || 0,
+        state: en.state || 'idle', stateT: en.stateT || 0, hitFlash: en.hitFlash || 0,
+        stun: en.stun || 0, anim: en.anim || 0, slamR: en.slamR || 190,
+        chargeDir: en.chargeDir || 0, vx: 0, vy: 0, atkCd: 1, atkRange: 40,
+        dmg: 1, speed: 0, xp: 0, coin: 0
+      };
+    });
+    this.boss = null;
+    for (var b = 0; b < this.enemies.length; b++) if (this.enemies[b].boss) this.boss = this.enemies[b];
+    this.pickups = (snap.pickups || []).map(function (pk) {
+      return {
+        x: pk.x, y: pk.y, kind: pk.kind, r: pk.r || 12, bob: pk.bob || 0,
+        life: pk.life == null ? 30 : pk.life, value: pk.value || 1,
+        item: pk.item || null, vx: 0, vy: 0
+      };
+    });
+    this.focusLocal();
+  };
+
   SP.BIOMES = BIOMES;
   SP.BIOME_ORDER = BIOME_ORDER;
   SP.ENEMY_TYPES = ENEMY_TYPES;
   SP.KIND_LABEL = KIND_LABEL;
   SP.deriveCharacter = deriveCharacter;
+  SP.makeCombatant = makeCombatant;
   SP.armorReduction = armorReduction;
   SP.xpForLevel = xpForLevel;
   SP.pickAutoTarget = pickAutoTarget;

@@ -78,6 +78,8 @@
     this.nearby = null;
     this.camera = { x: this.player.x, y: this.player.y };
     this.speed = 260;
+    /** 联机大厅中的其他玩家：{ id, name, level, x, y, facing, walkPhase, inDungeon } */
+    this.remotes = {};
   }
 
   Hideout.prototype.npcByKey = function (key) {
@@ -169,6 +171,68 @@
   Hideout.prototype.promptText = function () {
     if (!this.nearby) return '';
     return '按 F 与「' + this.nearby.name + '」交互 · ' + this.nearby.hint;
+  };
+
+  /** 同步联机大厅同伴列表（保留平滑坐标） */
+  Hideout.prototype.syncRemotes = function (peerList, selfId) {
+    var next = {};
+    var list = peerList || [];
+    for (var i = 0; i < list.length; i++) {
+      var src = list[i];
+      if (!src || !src.id || src.id === selfId) continue;
+      var prev = this.remotes[src.id];
+      next[src.id] = {
+        id: src.id,
+        name: src.name || '旅人',
+        level: src.level || 1,
+        x: src.x == null ? (prev ? prev.x : 1100) : src.x,
+        y: src.y == null ? (prev ? prev.y : 900) : src.y,
+        facing: src.facing == null ? (prev ? prev.facing : -Math.PI / 2) : src.facing,
+        walkPhase: src.walkPhase || 0,
+        inDungeon: !!src.inDungeon,
+        vx: prev ? prev.vx : 0,
+        vy: prev ? prev.vy : 0
+      };
+    }
+    this.remotes = next;
+  };
+
+  Hideout.prototype.applyRemotePos = function (msg) {
+    if (!msg || !msg.id) return;
+    var r = this.remotes[msg.id];
+    if (!r) {
+      r = {
+        id: msg.id, name: '旅人', level: 1,
+        x: msg.x, y: msg.y, facing: msg.facing || 0, walkPhase: 0,
+        inDungeon: false, vx: 0, vy: 0
+      };
+      this.remotes[msg.id] = r;
+    }
+    r.tx = msg.x; r.ty = msg.y;
+    r.facing = msg.facing;
+    r.walkPhase = msg.walkPhase || r.walkPhase;
+    r.level = msg.level || r.level;
+  };
+
+  /** 平滑插值远程玩家位置（视觉用） */
+  Hideout.prototype.tickRemotes = function (dt) {
+    var ids = Object.keys(this.remotes);
+    for (var i = 0; i < ids.length; i++) {
+      var r = this.remotes[ids[i]];
+      if (r.tx == null) continue;
+      var k = Math.min(1, dt * 10);
+      var ox = r.x, oy = r.y;
+      r.x = SP.lerp(r.x, r.tx, k);
+      r.y = SP.lerp(r.y, r.ty, k);
+      r.vx = (r.x - ox) / Math.max(dt, 0.001);
+      r.vy = (r.y - oy) / Math.max(dt, 0.001);
+    }
+  };
+
+  Hideout.prototype.remoteList = function () {
+    var out = [], ids = Object.keys(this.remotes);
+    for (var i = 0; i < ids.length; i++) out.push(this.remotes[ids[i]]);
+    return out;
   };
 
   SP.Hideout = Hideout;

@@ -910,6 +910,8 @@
         <span class="spacer"></span>
         <span class="tiny hidden" id="storeWarn" style="color:#ffb27a">⚠ 浏览器禁用了本地存储，进度不会被保存</span>
         <span class="tiny muted" id="hubPing">延迟 -- ms</span>
+        <span class="tiny muted" id="onlineStatus">离线</span>
+        <button id="btnOnline" class="ghost tiny-btn" title="多人联机大厅">联机</button>
         <button id="btnExportSave" class="ghost tiny-btn" title="导出本地存档 JSON">导出</button>
         <button id="btnImportSave" class="ghost tiny-btn" title="从 JSON 导入存档">导入</button>
         <input type="file" id="importSaveFile" accept="application/json,.json" class="hidden" aria-hidden="true">
@@ -1010,8 +1012,35 @@
           <span class="spacer"></span>
           <button class="ghost tiny-btn" data-close="panelPortal">关闭 (Esc)</button>
         </div>
-        <p class="portal-lead tiny muted">选群系和层数出发。击败关底首领即通关，并解锁更深的一层。</p>
+        <p class="portal-lead tiny muted">选群系和层数出发。击败关底首领即通关，并解锁更深的一层。联机时可<strong>单刷</strong>或<strong>组队</strong>进本。</p>
+        <div id="portalPartyBar" class="tiny muted" style="margin:0 0 10px;text-align:left"></div>
         <div id="biomeList" class="biome-grid"></div>
+      </div>
+    </div>
+
+    <!-- 多人联机大厅 -->
+    <div class="overlay" id="panelOnline">
+      <div class="panel modal" style="width:min(560px,94vw);text-align:left">
+        <div class="modal-head">
+          <h2 style="text-align:left">多人联机</h2>
+          <span class="spacer"></span>
+          <button class="ghost tiny-btn" data-close="panelOnline">关闭 (Esc)</button>
+        </div>
+        <p class="tiny muted" style="margin:0 0 10px">
+          先运行 <code>npm run online</code>，再点下方接入。大厅里能看见其他旅人；可组队进本，也可各自单刷。
+        </p>
+        <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <input id="onlineUrl" type="text" placeholder="ws://127.0.0.1:4321/ws" style="flex:1;min-width:180px">
+          <button id="btnOnlineConnect" class="primary tiny-btn">接入大厅</button>
+          <button id="btnOnlineDisconnect" class="ghost tiny-btn">断开</button>
+        </div>
+        <div id="onlineParty" class="tiny" style="margin-bottom:10px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid var(--line)"></div>
+        <div class="row" style="gap:8px;margin-bottom:8px">
+          <button id="btnPartyCreate" class="primary tiny-btn">创建队伍</button>
+          <button id="btnPartyLeave" class="ghost tiny-btn">离开队伍</button>
+        </div>
+        <div class="tiny muted" style="margin-bottom:6px">在线旅人（点「邀请」组队）</div>
+        <div id="onlinePeerList" style="max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:6px"></div>
       </div>
     </div>
 
@@ -1099,8 +1128,8 @@
         </div>
         <div class="help">
           <b>操作</b>：<span class="key">WASD</span> 移动 · <span class="key">LMB</span> 攻击 · <span class="key">R</span> 自动攻击 · <span class="key">Q</span> 震击 ·
-          <span class="key">E</span> 赐福 · <span class="key">空格</span> 冲刺 · <span class="key">1</span> 牛排 · <span class="key">2</span> 武器技（右下角）· <span class="key">Esc</span> 暂停。
-          装备带来的主动技能一律显示在右下角，与底部通用技能条分开。
+          <span class="key">E</span> 赐福 · <span class="key">空格</span> 冲刺 · <span class="key">1</span> 牛排 · <span class="key">2</span> 武器技（右下·小地图左侧）· <span class="key">Esc</span> 暂停。
+          装备带来的主动技能一律显示在右下角（小地图左侧），与底部通用技能条分开。
           脚下范围提示随武器变化：剑斧锤枪是扇形，链锤环身回旋，弓/法杖是远程瞄准线。
           自动攻击打开后，会先转向附近最近的敌人，进入攻击距离后再出手。<br><br>
           <b>武器类型</b>：短剑挥砍 · 战斧横劈 · 匕首连刺 · 重锤砸击（震波）· 长枪突刺 · 短弓射箭 · 法杖奥术弹（可穿透）· 链锤回旋 · 缚誓裁刃裁斩。<br><br>
@@ -1371,13 +1400,24 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.10.2';
+  SP.VERSION = '2.11.0';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.11.0',
+      date: '2026-10-09',
+      title: '多人联机 · 共享藏身处与组队副本',
+      items: [
+        '新增多人模式：npm run online 启动大厅，藏身处可同时看见其他旅人走动',
+        '可创建队伍、邀请入队（最多 4 人）；传送门支持组队发车或各自单刷',
+        '组队副本采用房主权威模拟：同伴输入转发、状态快照同步，敌人会追最近活人',
+        '联机面板显示在线名单与队伍状态；未组队时联机进本等同单刷'
+      ]
+    },
     {
       version: '2.10.2',
       date: '2026-10-09',
@@ -2406,6 +2446,38 @@
 
   function xpForLevel(lv) { return Math.round(42 + lv * 26 + lv * lv * 2.2); }
 
+  /** 由角色存档派生战斗实体（支持多人联机） */
+  function makeCombatant(character, meta) {
+    meta = meta || {};
+    var stats = deriveCharacter(character);
+    var wpn = stats.weapon || SP.Items.weaponProfile(null);
+    return {
+      id: meta.id || 'local',
+      name: meta.name || '旅人',
+      x: meta.x || 0, y: meta.y || 0, vx: 0, vy: 0, r: 18, facing: -Math.PI / 2,
+      damage: stats.damage, maxHp: stats.maxHp, hp: stats.maxHp,
+      speed: stats.speed, attackSpeed: stats.attackSpeed,
+      range: wpn.range, arcWidth: wpn.arc, weapon: wpn,
+      crit: stats.crit, critMult: stats.critMult,
+      armor: stats.armor, lifesteal: stats.lifesteal, regen: stats.regen,
+      thorns: stats.thorns, magnet: stats.magnet, greed: stats.greed,
+      luck: stats.luck, skillDmg: stats.skillDmg, cdr: stats.cdr,
+      uniques: stats.uniques,
+      atkCd: 0, swingT: 0, swingDir: 0,
+      quakeCd: 0, blessCd: 0, useCd: 0, dashCd: 0, dashT: 0, dashDir: 0,
+      weaponSkillCd: 0,
+      shield: 0, shieldT: 0, dmgBuffT: 0, dmgBuffMul: 1,
+      speedBuffT: 0, invuln: 0, hurtFlash: 0, walkPhase: 0,
+      killStreak: 0, level: stats.level,
+      curseMarks: 0, curseMarkMax: 5,
+      domainT: 0, domainR: 0, domainDmgMul: 1,
+      setFlags: stats.setFlags || {},
+      sets: stats.sets || null,
+      character: character || null,
+      coins: 0, stones: 0, upStones: 0, reStones: 0, loot: []
+    };
+  }
+
   /**
    * 由 角色等级 + 已装备物品 推导出实际战斗属性。
    * character: { level, equipped:{...}, }
@@ -2537,34 +2609,29 @@
     this.mlvl = this.biome.mlvlBase + (this.floor - 1);
     this.arena = this.biome.arena;
 
-    var stats = deriveCharacter(opts.character);
     this.character = opts.character || null;
-    this.stats = stats;
-
-    var wpn = stats.weapon || SP.Items.weaponProfile(null);
-    var p = this.player = {
-      x: 0, y: 0, vx: 0, vy: 0, r: 18, facing: -Math.PI / 2,
-      damage: stats.damage, maxHp: stats.maxHp, hp: stats.maxHp,
-      speed: stats.speed, attackSpeed: stats.attackSpeed,
-      range: wpn.range, arcWidth: wpn.arc, weapon: wpn,
-      crit: stats.crit, critMult: stats.critMult,
-      armor: stats.armor, lifesteal: stats.lifesteal, regen: stats.regen,
-      thorns: stats.thorns, magnet: stats.magnet, greed: stats.greed,
-      luck: stats.luck, skillDmg: stats.skillDmg, cdr: stats.cdr,
-      uniques: stats.uniques,
-      atkCd: 0, swingT: 0, swingDir: 0,
-      quakeCd: 0, blessCd: 0, useCd: 0, dashCd: 0, dashT: 0, dashDir: 0,
-      weaponSkillCd: 0,
-      shield: 0, shieldT: 0, dmgBuffT: 0, dmgBuffMul: 1,
-      speedBuffT: 0, invuln: 0, hurtFlash: 0, walkPhase: 0,
-      killStreak: 0, level: stats.level,
-      curseMarks: 0, curseMarkMax: 5,
-      domainT: 0, domainR: 0, domainDmgMul: 1,
-      setFlags: stats.setFlags || {},
-      sets: stats.sets || null
-    };
-    this.hasUnique = function (k) { return p.uniques.indexOf(k) >= 0; };
-    this.setFlag = function (k) { return p.setFlags && p.setFlags[k]; };
+    var roster = opts.party && opts.party.length
+      ? opts.party
+      : [{ id: opts.localId || 'local', name: opts.name || '旅人', character: opts.character }];
+    this.localId = opts.localId || roster[0].id || 'local';
+    this.players = [];
+    for (var pi = 0; pi < roster.length; pi++) {
+      var slot = roster[pi];
+      var ent = makeCombatant(slot.character, {
+        id: slot.id || ('p' + pi),
+        name: slot.name || ('旅人' + (pi + 1)),
+        x: Math.cos((pi / Math.max(1, roster.length)) * TAU) * 36,
+        y: Math.sin((pi / Math.max(1, roster.length)) * TAU) * 36
+      });
+      this.players.push(ent);
+    }
+    this.player = this.players[0];
+    for (var pj = 0; pj < this.players.length; pj++) {
+      if (this.players[pj].id === this.localId) { this.player = this.players[pj]; break; }
+    }
+    this.stats = deriveCharacter((roster[0] && roster[0].character) || opts.character);
+    this.bindActor(this.player);
+    this.partyScale = 1 + 0.45 * Math.max(0, this.players.length - 1);
 
     this.obstacles = buildObstacles(this.rng, this.biome);
     this.decals = [];
@@ -2603,8 +2670,9 @@
     this.xpGained = 0;
     this.levelsGained = 0;
 
-    // 副本推进：击杀配额 → 首领 → 通关
-    this.killsNeeded = Math.min(60, 14 + this.floor * 3);
+    // 副本推进：击杀配额 → 首领 → 通关（组队略增配额与场上怪数）
+    var partyN = Math.max(0, this.players.length - 1);
+    this.killsNeeded = Math.min(80, Math.round((14 + this.floor * 3) * (1 + 0.25 * partyN)));
     this.boss = null;
     this.bossSpawned = false;
     this.cleared = false;
@@ -2614,7 +2682,7 @@
     this.stats_damageTaken = 0;
     this.spawnTimer = 1.2;
     // 场上同时存在的怪越多，越逼玩家走位而不是站桩
-    this.aliveTarget = 8 + Math.min(12, Math.floor(this.floor / 1.2));
+    this.aliveTarget = 8 + Math.min(12, Math.floor(this.floor / 1.2)) + partyN * 2;
     this.hazards = [];
     this.hazardTimer = 2.2;
     this.sporeTick = 0;
@@ -2633,6 +2701,45 @@
 
   World.prototype.emit = function (type, data) { this.events.push({ type: type, data: data || null, t: this.time }); };
   World.prototype.drainEvents = function () { var e = this.events; this.events = []; return e; };
+
+  /** 把技能/独特效果上下文绑到指定战斗员（多人时切换） */
+  World.prototype.bindActor = function (p) {
+    this.player = p;
+    var self = this;
+    this.hasUnique = function (k) { return p && p.uniques && p.uniques.indexOf(k) >= 0; };
+    this.setFlag = function (k) { return p && p.setFlags && p.setFlags[k]; };
+    void self;
+  };
+
+  World.prototype.livingPlayers = function () {
+    var out = [];
+    for (var i = 0; i < this.players.length; i++) {
+      if (this.players[i].hp > 0) out.push(this.players[i]);
+    }
+    return out;
+  };
+
+  World.prototype.nearestLivingPlayer = function (x, y) {
+    var best = null, bd = Infinity;
+    for (var i = 0; i < this.players.length; i++) {
+      var p = this.players[i];
+      if (p.hp <= 0) continue;
+      var d = dist(x, y, p.x, p.y);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  };
+
+  World.prototype.focusLocal = function () {
+    for (var i = 0; i < this.players.length; i++) {
+      if (this.players[i].id === this.localId) {
+        this.bindActor(this.players[i]);
+        return this.player;
+      }
+    }
+    if (this.players[0]) this.bindActor(this.players[0]);
+    return this.player;
+  };
 
   /* ------------------------------------------------------------- 几何与碰撞 */
   function pushOutOfObstacles(w, ent) {
@@ -2742,13 +2849,13 @@
       y = clamp(p.y + Math.sin(a) * rad, -this.arena + 40, this.arena - 40);
       if (!blocked(this, x, y, def.radius)) ok = true;
     }
-    var hpMul = (def.boss ? this.bossHpMul() : sc.hp) * (elite ? 2.8 : 1);
+    var hpMul = (def.boss ? this.bossHpMul() : sc.hp) * (elite ? 2.8 : 1) * (this.partyScale || 1);
     var e = {
       key: key, name: (elite ? '精英·' : '') + def.name, kind: def.kind, family: def.family || 'beast',
       x: x, y: y, vx: 0, vy: 0, r: def.radius * (elite ? 1.22 : 1),
       hp: def.hp * hpMul, maxHp: def.hp * hpMul,
       speed: def.speed * sc.speed * (elite ? 0.92 : 1),
-      dmg: def.dmg * sc.dmg * (elite ? 1.45 : 1),
+      dmg: def.dmg * sc.dmg * (elite ? 1.45 : 1) * Math.sqrt(this.partyScale || 1),
       atkCd: def.atkCd * this.rng.range(0.7, 1.2), atkRange: def.atkRange,
       xp: def.xp * (1 + 0.55 * this.mlvl) * (elite ? 2.5 : 1),
       coin: def.coin * (elite ? 4 : 1),
@@ -2824,15 +2931,19 @@
       this.sporeTick += dt;
       if (this.sporeTick >= 0.55) {
         this.sporeTick = 0;
-        var moving = SP.len(p.vx, p.vy) > 55;
-        var dps = (2.2 + this.mlvl * 0.55) * (moving ? 0.32 : 1);
-        this.hurtPlayer(dps * 0.55, p.x, p.y, { soft: true });
-        if (!moving) {
-          this.fx.push({
-            t: 'p', x: p.x + this.rng.range(-18, 18), y: p.y + this.rng.range(-18, 18),
-            vx: this.rng.range(-20, 20), vy: this.rng.range(-40, -10),
-            dur: 0.5, life: 0.5, color: '#7dce86', size: 3.2
-          });
+        var livingSp = this.livingPlayers();
+        for (var si = 0; si < livingSp.length; si++) {
+          var sp = livingSp[si];
+          var moving = SP.len(sp.vx, sp.vy) > 55;
+          var dps = (2.2 + this.mlvl * 0.55) * (moving ? 0.32 : 1);
+          this.hurtPlayer(dps * 0.55, sp.x, sp.y, { soft: true, target: sp });
+          if (!moving) {
+            this.fx.push({
+              t: 'p', x: sp.x + this.rng.range(-18, 18), y: sp.y + this.rng.range(-18, 18),
+              vx: this.rng.range(-20, 20), vy: this.rng.range(-40, -10),
+              dur: 0.5, life: 0.5, color: '#7dce86', size: 3.2
+            });
+          }
         }
       }
     }
@@ -2841,10 +2952,11 @@
       this.hazardTimer -= dt;
       if (this.hazardTimer <= 0) {
         this.hazardTimer = Math.max(1.35, 3.1 - this.floor * 0.06);
+        var focus = this.nearestLivingPlayer(0, 0) || p;
         var a = this.rng() * TAU;
         var rad = this.rng.range(30, 240);
-        var hx = clamp(p.x + Math.cos(a) * rad, -this.arena + 40, this.arena - 40);
-        var hy = clamp(p.y + Math.sin(a) * rad, -this.arena + 40, this.arena - 40);
+        var hx = clamp(focus.x + Math.cos(a) * rad, -this.arena + 40, this.arena - 40);
+        var hy = clamp(focus.y + Math.sin(a) * rad, -this.arena + 40, this.arena - 40);
         this.hazards.push({
           kind: 'crystal',
           x: hx, y: hy,
@@ -2863,8 +2975,11 @@
       this.ring(hz.x, hz.y, 10, hz.r, 0.35, '#7eb6e8', 5);
       this.burst(hz.x, hz.y, 14, '#a8e0ff', 160, 0.4, 2.8);
       this.shake = Math.max(this.shake, 5);
-      if (dist(hz.x, hz.y, p.x, p.y) < hz.r + p.r) {
-        this.hurtPlayer(hz.dmg, hz.x, hz.y);
+      var livingHz = this.livingPlayers();
+      for (var hi = 0; hi < livingHz.length; hi++) {
+        if (dist(hz.x, hz.y, livingHz[hi].x, livingHz[hi].y) < hz.r + livingHz[hi].r) {
+          this.hurtPlayer(hz.dmg, hz.x, hz.y, { target: livingHz[hi] });
+        }
       }
       this.hazards.splice(i, 1);
     }
@@ -2912,9 +3027,12 @@
       var bias = (e.boss ? 0.35 : 0) + (e.elite ? 0.15 : 0) + this.floor * 0.012;
       var item = SP.Items.roll(this.rng, { ilvl: ilvl, rarityBias: bias, luck: p.luck });
       if (e.boss && i === 0) {
-        var idx = SP.Items.RARITY_BY_KEY[item.rarity].index;
-        if (idx < 2) {
-          item = SP.Items.roll(this.rng, { ilvl: ilvl, rarityBias: bias + 1.6, luck: p.luck });
+        var guard = 0;
+        while (SP.Items.RARITY_BY_KEY[item.rarity].index < 2 && guard < 16) {
+          item = SP.Items.roll(this.rng, {
+            ilvl: ilvl, rarityBias: bias + 1.8 + guard * 0.55, luck: p.luck
+          });
+          guard++;
         }
       }
       this.pickups.push({
@@ -3043,9 +3161,12 @@
   World.prototype.hurtPlayer = function (amount, srcX, srcY, opts) {
     opts = opts || {};
     var soft = !!opts.soft;
-    var p = this.player;
+    var p = opts.target || this.player;
+    if (!p || p.hp <= 0) return 0;
     if (this.dead) return 0;
     if (!soft && p.invuln > 0) return 0;
+    var prev = this.player;
+    this.bindActor(p);
     var reduced = amount * (1 - armorReduction(p.armor, this.mlvl));
     if (p.shield > 0) {
       var absorbed = Math.min(p.shield, reduced);
@@ -3075,17 +3196,22 @@
     } else {
       p.hurtFlash = Math.max(p.hurtFlash, 0.1);
     }
-    this.emit('hurt', { amount: reduced, soft: soft });
-    if (p.hp <= 0) this.die();
+    this.emit('hurt', { amount: reduced, soft: soft, id: p.id });
+    if (p.hp <= 0) {
+      this.addText(p.x, p.y - 50, (p.name || '旅人') + ' 倒下', '#ff9ec4', 16, -20);
+      if (this.livingPlayers().length === 0) this.die();
+    }
+    if (prev) this.bindActor(prev);
+    else this.focusLocal();
     return reduced;
   };
 
   World.prototype.die = function () {
     if (this.dead) return;
     this.dead = true;
-    this.player.hp = 0;
     this.shake = 22;
-    this.burst(this.player.x, this.player.y, 40, '#ff9ec4', 240, 0.9, 4);
+    var focus = this.focusLocal() || this.players[0];
+    if (focus) this.burst(focus.x, focus.y, 40, '#ff9ec4', 240, 0.9, 4);
     this.deathStats = this.summary();
     this.emit('death', this.deathStats);
   };
@@ -3463,6 +3589,10 @@
   };
 
   /* ------------------------------------------------------------------ 更新 */
+  /**
+   * input 可为单人输入对象，或多人 { [playerId]: input }。
+   * 联机房主传入后者；单机保持原用法。
+   */
   World.prototype.update = function (dt, input) {
     if (this.dead) { this.updateVisuals(dt); return; }
     input = input || {};
@@ -3471,28 +3601,42 @@
     this.time += dt;
     if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) this.combo = 0; }
 
+    var multi = !!(input && input.__multi);
+    var byId = multi ? input : null;
+    var localInput = multi ? (input[this.localId] || {}) : input;
+
     this.updateSpawns(dt);
-    this.updatePlayer(dt, input);
+    if (multi) {
+      for (var i = 0; i < this.players.length; i++) {
+        var act = this.players[i];
+        if (act.hp <= 0) continue;
+        this.bindActor(act);
+        this.updatePlayer(dt, byId[act.id] || {});
+      }
+      this.focusLocal();
+    } else {
+      this.updatePlayer(dt, input);
+    }
     this.updateEnemies(dt);
     this.updateProjectiles(dt);
     this.updateHazards(dt);
     this.updatePickups(dt);
     this.updateVisuals(dt);
 
-    // 相机跟随，并朝瞄准方向做轻微前瞻
+    // 相机跟随本地玩家
     var cam = this.camera;
-    var ax = (input.aimX !== undefined) ? input.aimX - this.player.x : 0;
-    var ay = (input.aimY !== undefined) ? input.aimY - this.player.y : 0;
+    var focus = this.focusLocal();
+    var ax = (localInput.aimX !== undefined) ? localInput.aimX - focus.x : 0;
+    var ay = (localInput.aimY !== undefined) ? localInput.aimY - focus.y : 0;
     var ll = SP.len(ax, ay) || 1;
     ax = ax / ll * Math.min(90, ll * 0.28);
     ay = ay / ll * Math.min(90, ll * 0.28);
-    cam.x = SP.lerp(cam.x, this.player.x + ax, Math.min(1, dt * 7));
-    cam.y = SP.lerp(cam.y, this.player.y + ay, Math.min(1, dt * 7));
+    cam.x = SP.lerp(cam.x, focus.x + ax, Math.min(1, dt * 7));
+    cam.y = SP.lerp(cam.y, focus.y + ay, Math.min(1, dt * 7));
 
-    // 相机夹在副本范围内：否则贴墙时会把地图外的「虚空」露出来
-    if (input.viewW && input.viewH) {
-      var limX = Math.max(0, this.arena - input.viewW / 2);
-      var limY = Math.max(0, this.arena - input.viewH / 2);
+    if (localInput.viewW && localInput.viewH) {
+      var limX = Math.max(0, this.arena - localInput.viewW / 2);
+      var limY = Math.max(0, this.arena - localInput.viewH / 2);
       cam.x = clamp(cam.x, -limX, limX);
       cam.y = clamp(cam.y, -limY, limY);
     }
@@ -3507,6 +3651,7 @@
 
   World.prototype.updatePlayer = function (dt, input) {
     var p = this.player;
+    if (!p || p.hp <= 0) return;
     p.atkCd = Math.max(0, p.atkCd - dt);
     p.quakeCd = Math.max(0, p.quakeCd - dt);
     p.blessCd = Math.max(0, p.blessCd - dt);
@@ -3563,7 +3708,7 @@
   };
 
   World.prototype.updateEnemies = function (dt) {
-    var p = this.player, i, j, e, list = this.enemies;
+    var i, j, e, list = this.enemies;
 
     for (i = list.length - 1; i >= 0; i--) {
       if (list[i].dying > 0) {
@@ -3584,6 +3729,8 @@
         clampArena(this, e);
         continue;
       }
+      var p = this.nearestLivingPlayer(e.x, e.y) || this.player;
+      if (!p) continue;
       var dx = p.x - e.x, dy = p.y - e.y;
       var d = Math.sqrt(dx * dx + dy * dy) || 1;
       var ux = dx / d, uy = dy / d;
@@ -3596,7 +3743,7 @@
           e.atkCd -= dt;
           if (e.atkCd <= 0) {
             e.atkCd = def.atkCd * this.rng.range(0.85, 1.15);
-            this.hurtPlayer(e.dmg, e.x, e.y);
+            this.hurtPlayer(e.dmg, e.x, e.y, { target: p });
             this.burst(p.x, p.y, 5, '#ff8080', 120, 0.25, 2.5);
           }
         }
@@ -3612,7 +3759,7 @@
         } else if (e.state === 'dash') {
           ax = Math.cos(e.chargeDir) * 540; ay = Math.sin(e.chargeDir) * 540;
           this.fx.push({ t: 'p', x: e.x, y: e.y, vx: 0, vy: 0, dur: 0.25, life: 0.25, color: e.color, size: 5 });
-          if (!e.didHit && d < e.r + p.r + 12) { e.didHit = true; this.hurtPlayer(e.dmg, e.x, e.y); }
+          if (!e.didHit && d < e.r + p.r + 12) { e.didHit = true; this.hurtPlayer(e.dmg, e.x, e.y, { target: p }); }
           if (e.stateT <= 0) { e.state = 'idle'; e.stateT = this.rng.range(0.6, 1.2); }
         }
       } else if (e.kind === 'ranged') {
@@ -3635,7 +3782,12 @@
             e.state = 'idle';
             this.ring(e.x, e.y, 20, e.slamR, 0.4, '#ff9c5b', 9);
             this.shake = Math.max(this.shake, 13);
-            if (dist(e.x, e.y, p.x, p.y) < e.slamR + p.r) this.hurtPlayer(e.dmg, e.x, e.y);
+            var living = this.livingPlayers();
+            for (var bi = 0; bi < living.length; bi++) {
+              if (dist(e.x, e.y, living[bi].x, living[bi].y) < e.slamR + living[bi].r) {
+                this.hurtPlayer(e.dmg, e.x, e.y, { target: living[bi] });
+              }
+            }
             this.burst(e.x, e.y, 20, '#ff9c5b', 200, 0.6, 3.5);
           }
         } else if (e.slamCd <= 0 && d < 230) {
@@ -3739,10 +3891,17 @@
           pr.pierce = (pr.pierce || 1) - 1;
           if (pr.pierce <= 0) { hit = true; break; }
         }
-      } else if (SP.dist(pr.x, pr.y, p.x, p.y) < pr.r + p.r) {
-        this.hurtPlayer(pr.dmg, pr.x, pr.y);
-        this.burst(pr.x, pr.y, 8, pr.color, 130, 0.35, 3);
-        hit = true;
+      } else {
+        var victims = this.livingPlayers();
+        for (var vi = 0; vi < victims.length; vi++) {
+          var vp = victims[vi];
+          if (SP.dist(pr.x, pr.y, vp.x, vp.y) < pr.r + vp.r) {
+            this.hurtPlayer(pr.dmg, pr.x, pr.y, { target: vp });
+            this.burst(pr.x, pr.y, 8, pr.color, 130, 0.35, 3);
+            hit = true;
+            break;
+          }
+        }
       }
       if (!hit && blocked(this, pr.x, pr.y, pr.r * 0.4)) {
         this.burst(pr.x, pr.y, 6, pr.color, 100, 0.3, 2.6);
@@ -3755,11 +3914,15 @@
   };
 
   World.prototype.updatePickups = function (dt) {
-    var p = this.player;
     for (var i = this.pickups.length - 1; i >= 0; i--) {
       var k = this.pickups[i];
       k.life -= dt;
       k.bob += dt * 4;
+      var p = this.nearestLivingPlayer(k.x, k.y) || this.player;
+      if (!p) {
+        if (k.life <= 0) this.pickups.splice(i, 1);
+        continue;
+      }
       var d = SP.dist(k.x, k.y, p.x, p.y);
       if (d < p.magnet && k.life > 0.2) {
         var pull = (1 - d / p.magnet) * 520 + 90;
@@ -3770,27 +3933,32 @@
       if (d < p.r + k.r) {
         if (k.kind === 'coin') {
           this.coins += k.value;
+          p.coins = (p.coins || 0) + k.value;
           this.addText(p.x, p.y - 30, '+' + k.value, '#ffd75e', 14, -40);
         } else if (k.kind === 'alpha') {
           this.stones += k.value;
+          p.stones = (p.stones || 0) + k.value;
           this.addText(p.x, p.y - 30, '+1 alpha-stone', '#a8e6ff', 15, -40);
           this.burst(k.x, k.y, 10, '#a8e6ff', 140, 0.5, 3);
         } else if (k.kind === 'upstone') {
           this.upStones += k.value;
+          p.upStones = (p.upStones || 0) + k.value;
           this.addText(p.x, p.y - 30, '+' + k.value + ' 强化石', '#ffb27a', 14, -40);
         } else if (k.kind === 'restone') {
           this.reStones += k.value;
+          p.reStones = (p.reStones || 0) + k.value;
           this.addText(p.x, p.y - 30, '+' + k.value + ' 重铸石', '#c9a6ff', 14, -40);
         } else if (k.kind === 'item') {
           this.loot.push(k.item);
-          this.emit('loot', { item: k.item });
+          p.loot.push(k.item);
+          this.emit('loot', { item: k.item, id: p.id });
         } else if (k.kind === 'steak') {
           if (this.steaks < 9) {
             this.steaks++;
             this.addText(p.x, p.y - 30, '牛排 +1', '#ffc48f', 15, -40);
           } else { p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.1); }
         }
-        this.emit('pickup', { kind: k.kind });
+        this.emit('pickup', { kind: k.kind, id: p.id });
         this.pickups.splice(i, 1);
         continue;
       }
@@ -3862,11 +4030,101 @@
     };
   }
 
+  /** 房主权威：压缩快照供同伴渲染 */
+  World.prototype.snapshot = function () {
+    var players = [];
+    for (var i = 0; i < this.players.length; i++) {
+      var p = this.players[i];
+      players.push({
+        id: p.id, name: p.name, x: p.x, y: p.y, vx: p.vx, vy: p.vy,
+        facing: p.facing, hp: p.hp, maxHp: p.maxHp, walkPhase: p.walkPhase,
+        swingT: p.swingT, swingDir: p.swingDir, hurtFlash: p.hurtFlash,
+        shield: p.shield, domainT: p.domainT, domainR: p.domainR,
+        curseMarks: p.curseMarks, level: p.level
+      });
+    }
+    var enemies = [];
+    for (var e = 0; e < this.enemies.length; e++) {
+      var en = this.enemies[e];
+      enemies.push({
+        key: en.key, x: en.x, y: en.y, hp: en.hp, maxHp: en.maxHp,
+        r: en.r, color: en.color, boss: en.boss, elite: en.elite,
+        dying: en.dying, spawnT: en.spawnT, state: en.state, stateT: en.stateT,
+        hitFlash: en.hitFlash, stun: en.stun, anim: en.anim,
+        slamR: en.slamR, chargeDir: en.chargeDir
+      });
+    }
+    var pickups = [];
+    for (var k = 0; k < this.pickups.length; k++) {
+      var pk = this.pickups[k];
+      pickups.push({
+        x: pk.x, y: pk.y, kind: pk.kind, r: pk.r, bob: pk.bob, life: pk.life,
+        value: pk.value, item: pk.item || null
+      });
+    }
+    return {
+      time: this.time, kills: this.kills, killsNeeded: this.killsNeeded,
+      coins: this.coins, stones: this.stones, steaks: this.steaks,
+      bossSpawned: this.bossSpawned, cleared: this.cleared, dead: this.dead,
+      players: players, enemies: enemies, pickups: pickups,
+      camera: { x: this.camera.x, y: this.camera.y }
+    };
+  };
+
+  World.prototype.applySnapshot = function (snap) {
+    if (!snap) return;
+    this.time = snap.time;
+    this.kills = snap.kills;
+    this.killsNeeded = snap.killsNeeded;
+    this.coins = snap.coins;
+    this.stones = snap.stones;
+    this.steaks = snap.steaks;
+    this.bossSpawned = snap.bossSpawned;
+    this.cleared = snap.cleared;
+    this.dead = snap.dead;
+    // 不覆盖相机：客机跟随本地角色，房主自己算
+    var byId = {};
+    for (var i = 0; i < this.players.length; i++) byId[this.players[i].id] = this.players[i];
+    (snap.players || []).forEach(function (sp) {
+      var p = byId[sp.id];
+      if (!p) return;
+      p.x = sp.x; p.y = sp.y; p.vx = sp.vx; p.vy = sp.vy;
+      p.facing = sp.facing; p.hp = sp.hp; p.maxHp = sp.maxHp;
+      p.walkPhase = sp.walkPhase; p.swingT = sp.swingT; p.swingDir = sp.swingDir;
+      p.hurtFlash = sp.hurtFlash; p.shield = sp.shield;
+      p.domainT = sp.domainT; p.domainR = sp.domainR;
+      p.curseMarks = sp.curseMarks;
+    });
+    this.enemies = (snap.enemies || []).map(function (en) {
+      return {
+        key: en.key, name: (ENEMY_TYPES[en.key] && ENEMY_TYPES[en.key].name) || en.key,
+        kind: (ENEMY_TYPES[en.key] && ENEMY_TYPES[en.key].kind) || 'melee',
+        x: en.x, y: en.y, hp: en.hp, maxHp: en.maxHp, r: en.r, color: en.color,
+        boss: en.boss, elite: en.elite, dying: en.dying || 0, spawnT: en.spawnT || 0,
+        state: en.state || 'idle', stateT: en.stateT || 0, hitFlash: en.hitFlash || 0,
+        stun: en.stun || 0, anim: en.anim || 0, slamR: en.slamR || 190,
+        chargeDir: en.chargeDir || 0, vx: 0, vy: 0, atkCd: 1, atkRange: 40,
+        dmg: 1, speed: 0, xp: 0, coin: 0
+      };
+    });
+    this.boss = null;
+    for (var b = 0; b < this.enemies.length; b++) if (this.enemies[b].boss) this.boss = this.enemies[b];
+    this.pickups = (snap.pickups || []).map(function (pk) {
+      return {
+        x: pk.x, y: pk.y, kind: pk.kind, r: pk.r || 12, bob: pk.bob || 0,
+        life: pk.life == null ? 30 : pk.life, value: pk.value || 1,
+        item: pk.item || null, vx: 0, vy: 0
+      };
+    });
+    this.focusLocal();
+  };
+
   SP.BIOMES = BIOMES;
   SP.BIOME_ORDER = BIOME_ORDER;
   SP.ENEMY_TYPES = ENEMY_TYPES;
   SP.KIND_LABEL = KIND_LABEL;
   SP.deriveCharacter = deriveCharacter;
+  SP.makeCombatant = makeCombatant;
   SP.armorReduction = armorReduction;
   SP.xpForLevel = xpForLevel;
   SP.pickAutoTarget = pickAutoTarget;
@@ -4724,6 +4982,8 @@
     this.nearby = null;
     this.camera = { x: this.player.x, y: this.player.y };
     this.speed = 260;
+    /** 联机大厅中的其他玩家：{ id, name, level, x, y, facing, walkPhase, inDungeon } */
+    this.remotes = {};
   }
 
   Hideout.prototype.npcByKey = function (key) {
@@ -4817,10 +5077,308 @@
     return '按 F 与「' + this.nearby.name + '」交互 · ' + this.nearby.hint;
   };
 
+  /** 同步联机大厅同伴列表（保留平滑坐标） */
+  Hideout.prototype.syncRemotes = function (peerList, selfId) {
+    var next = {};
+    var list = peerList || [];
+    for (var i = 0; i < list.length; i++) {
+      var src = list[i];
+      if (!src || !src.id || src.id === selfId) continue;
+      var prev = this.remotes[src.id];
+      next[src.id] = {
+        id: src.id,
+        name: src.name || '旅人',
+        level: src.level || 1,
+        x: src.x == null ? (prev ? prev.x : 1100) : src.x,
+        y: src.y == null ? (prev ? prev.y : 900) : src.y,
+        facing: src.facing == null ? (prev ? prev.facing : -Math.PI / 2) : src.facing,
+        walkPhase: src.walkPhase || 0,
+        inDungeon: !!src.inDungeon,
+        vx: prev ? prev.vx : 0,
+        vy: prev ? prev.vy : 0
+      };
+    }
+    this.remotes = next;
+  };
+
+  Hideout.prototype.applyRemotePos = function (msg) {
+    if (!msg || !msg.id) return;
+    var r = this.remotes[msg.id];
+    if (!r) {
+      r = {
+        id: msg.id, name: '旅人', level: 1,
+        x: msg.x, y: msg.y, facing: msg.facing || 0, walkPhase: 0,
+        inDungeon: false, vx: 0, vy: 0
+      };
+      this.remotes[msg.id] = r;
+    }
+    r.tx = msg.x; r.ty = msg.y;
+    r.facing = msg.facing;
+    r.walkPhase = msg.walkPhase || r.walkPhase;
+    r.level = msg.level || r.level;
+  };
+
+  /** 平滑插值远程玩家位置（视觉用） */
+  Hideout.prototype.tickRemotes = function (dt) {
+    var ids = Object.keys(this.remotes);
+    for (var i = 0; i < ids.length; i++) {
+      var r = this.remotes[ids[i]];
+      if (r.tx == null) continue;
+      var k = Math.min(1, dt * 10);
+      var ox = r.x, oy = r.y;
+      r.x = SP.lerp(r.x, r.tx, k);
+      r.y = SP.lerp(r.y, r.ty, k);
+      r.vx = (r.x - ox) / Math.max(dt, 0.001);
+      r.vy = (r.y - oy) / Math.max(dt, 0.001);
+    }
+  };
+
+  Hideout.prototype.remoteList = function () {
+    var out = [], ids = Object.keys(this.remotes);
+    for (var i = 0; i < ids.length; i++) out.push(this.remotes[ids[i]]);
+    return out;
+  };
+
   SP.Hideout = Hideout;
   SP.HIDEOUT_SIZE = { width: WIDTH, height: HEIGHT };
   SP.HIDEOUT_NPCS = NPC_DEFS;
   SP.HIDEOUT_INTERACT_RANGE = INTERACT_RANGE;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+<script>
+/* ==================== src/net.js ==================== */
+/* 时空猪 · net.js — 多人联机客户端（WebSocket 大厅 / 组队 / 副本中继）
+ * 纯逻辑封装，不触碰 DOM；由 ui / main 驱动。
+ */
+(function (global) {
+  'use strict';
+  var SP = global.SP || (global.SP = {});
+
+  function defaultWsUrl() {
+    if (typeof location === 'undefined') return 'ws://127.0.0.1:4321/ws';
+    if (location.protocol === 'file:') return 'ws://127.0.0.1:4321/ws';
+    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return proto + '//' + location.host + '/ws';
+  }
+
+  function OnlineClient(opts) {
+    opts = opts || {};
+    this.url = opts.url || defaultWsUrl();
+    this.ws = null;
+    this.id = null;
+    this.connected = false;
+    this.peers = {}; // id -> peer
+    this.party = null;
+    this.handlers = {};
+    this._posAcc = 0;
+    this.pendingInvite = null;
+  }
+
+  OnlineClient.prototype.on = function (type, fn) {
+    if (!this.handlers[type]) this.handlers[type] = [];
+    this.handlers[type].push(fn);
+  };
+
+  OnlineClient.prototype.emit = function (type, data) {
+    var list = this.handlers[type] || [];
+    for (var i = 0; i < list.length; i++) {
+      try { list[i](data); } catch (e) { /* ignore */ }
+    }
+  };
+
+  OnlineClient.prototype.connect = function (profile) {
+    var self = this;
+    profile = profile || {};
+    if (this.ws && (this.ws.readyState === 0 || this.ws.readyState === 1)) {
+      this.disconnect();
+    }
+    var url = this.url;
+    var ws;
+    try { ws = new WebSocket(url); }
+    catch (e) {
+      this.emit('error', { reason: '无法创建连接：' + (e && e.message) });
+      return;
+    }
+    this.ws = ws;
+    ws.onopen = function () {
+      self.connected = true;
+      self.send({
+        t: 'hello',
+        name: profile.name || '旅人',
+        level: profile.level || 1,
+        x: profile.x, y: profile.y, facing: profile.facing
+      });
+      self.emit('open', {});
+    };
+    ws.onmessage = function (ev) {
+      var msg;
+      try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      self._handle(msg);
+    };
+    ws.onclose = function () {
+      self.connected = false;
+      self.id = null;
+      self.peers = {};
+      self.party = null;
+      self.emit('close', {});
+    };
+    ws.onerror = function () {
+      self.emit('error', { reason: '联机连接失败（请确认已运行 npm run online）' });
+    };
+  };
+
+  OnlineClient.prototype.disconnect = function () {
+    if (this.ws) {
+      try { this.ws.close(); } catch (e) { /* ignore */ }
+    }
+    this.ws = null;
+    this.connected = false;
+  };
+
+  OnlineClient.prototype.send = function (msg) {
+    if (!this.ws || this.ws.readyState !== 1) return false;
+    try { this.ws.send(JSON.stringify(msg)); return true; }
+    catch (e) { return false; }
+  };
+
+  OnlineClient.prototype._handle = function (msg) {
+    if (!msg || !msg.t) return;
+    if (msg.t === 'welcome') {
+      this.id = msg.id;
+      this.peers = {};
+      (msg.peers || []).forEach(function (p) { this.peers[p.id] = p; }, this);
+      this.emit('welcome', msg);
+      this.emit('peers', this.peerList());
+      return;
+    }
+    if (msg.t === 'peer_join') {
+      if (msg.peer) this.peers[msg.peer.id] = msg.peer;
+      this.emit('peer_join', msg.peer);
+      this.emit('peers', this.peerList());
+      return;
+    }
+    if (msg.t === 'peer_leave') {
+      delete this.peers[msg.id];
+      this.emit('peer_leave', msg);
+      this.emit('peers', this.peerList());
+      return;
+    }
+    if (msg.t === 'hub_pos') {
+      var p = this.peers[msg.id];
+      if (!p) {
+        p = { id: msg.id, name: '旅人', level: 1 };
+        this.peers[msg.id] = p;
+      }
+      p.x = msg.x; p.y = msg.y; p.facing = msg.facing;
+      p.walkPhase = msg.walkPhase; p.level = msg.level || p.level;
+      this.emit('hub_pos', msg);
+      return;
+    }
+    if (msg.t === 'peer_dungeon') {
+      var q = this.peers[msg.id];
+      if (q) q.inDungeon = !!msg.inDungeon;
+      this.emit('peers', this.peerList());
+      return;
+    }
+    if (msg.t === 'party_update') {
+      this.party = msg.party || null;
+      this.emit('party', this.party);
+      return;
+    }
+    if (msg.t === 'party_invite') {
+      this.pendingInvite = msg;
+      this.emit('invite', msg);
+      return;
+    }
+    if (msg.t === 'toast') {
+      this.emit('toast', msg);
+      return;
+    }
+    if (msg.t === 'chat') {
+      this.emit('chat', msg);
+      return;
+    }
+    if (msg.t === 'dungeon_start' || msg.t === 'dungeon_input' ||
+        msg.t === 'dungeon_snap' || msg.t === 'dungeon_event' || msg.t === 'dungeon_end') {
+      this.emit(msg.t, msg);
+      return;
+    }
+  };
+
+  OnlineClient.prototype.peerList = function () {
+    var out = [];
+    Object.keys(this.peers).forEach(function (id) { out.push(this.peers[id]); }, this);
+    return out;
+  };
+
+  OnlineClient.prototype.tickHub = function (dt, hideout, profile) {
+    if (!this.connected || !hideout) return;
+    this._posAcc += dt;
+    if (this._posAcc < 0.08) return;
+    this._posAcc = 0;
+    var p = hideout.player;
+    this.send({
+      t: 'hub_pos',
+      x: Math.round(p.x * 10) / 10,
+      y: Math.round(p.y * 10) / 10,
+      facing: Math.round(p.facing * 100) / 100,
+      walkPhase: Math.round((p.walkPhase || 0) * 100) / 100,
+      level: profile && profile.level
+    });
+  };
+
+  OnlineClient.prototype.createParty = function () { this.send({ t: 'party_create' }); };
+  OnlineClient.prototype.leaveParty = function () { this.send({ t: 'party_leave' }); };
+  OnlineClient.prototype.invite = function (toId) { this.send({ t: 'party_invite', toId: toId }); };
+  OnlineClient.prototype.acceptInvite = function (partyId) {
+    this.send({ t: 'party_accept', partyId: partyId });
+    this.pendingInvite = null;
+  };
+
+  OnlineClient.prototype.syncCharacter = function (name, character) {
+    return this.send({
+      t: 'char_sync',
+      name: name || '旅人',
+      character: OnlineClient.packCharacter(character)
+    });
+  };
+
+  OnlineClient.prototype.startDungeon = function (opts) {
+    opts = opts || {};
+    return this.send({
+      t: 'dungeon_start',
+      biome: opts.biome,
+      floor: opts.floor,
+      seed: opts.seed,
+      roster: opts.roster || []
+    });
+  };
+
+  OnlineClient.prototype.sendDungeonInput = function (input) {
+    return this.send({ t: 'dungeon_input', input: input });
+  };
+
+  OnlineClient.prototype.sendDungeonSnap = function (snap) {
+    return this.send({ t: 'dungeon_snap', snap: snap });
+  };
+
+  OnlineClient.prototype.sendDungeonEnd = function (payload) {
+    return this.send({ t: 'dungeon_end', result: payload || {} });
+  };
+
+  OnlineClient.defaultWsUrl = defaultWsUrl;
+  OnlineClient.packCharacter = function (ch) {
+    ch = ch || {};
+    return {
+      level: ch.level || 1,
+      xp: ch.xp || 0,
+      steaks: Math.min(9, ch.steaks || 0),
+      equipped: ch.equipped || {}
+    };
+  };
+
+  SP.OnlineClient = OnlineClient;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 </script>
@@ -5361,29 +5919,37 @@
     /* ---------------------------------------------------------- 普攻扇形 */
     this.drawAttackArc(ctx, world, S, opts);
 
-    /* ---------------------------------------------------------- 小领域圈 */
-    if (world.player && world.player.domainT > 0 && world.player.domainR > 0) {
-      var dp = S(world.player.x, world.player.y);
-      var pulseD = 0.55 + Math.sin(this.t * 5.5) * 0.12;
+    /* ---------------------------------------------------------- 小领域圈（全体玩家） */
+    var plist = world.players || (world.player ? [world.player] : []);
+    for (var di = 0; di < plist.length; di++) {
+      var dpl = plist[di];
+      if (!(dpl && dpl.domainT > 0 && dpl.domainR > 0)) continue;
+      var dp = S(dpl.x, dpl.y);
+      var pulseD = 0.55 + Math.sin(this.t * 5.5 + di) * 0.12;
       ctx.save();
       ctx.globalAlpha = 0.16 + pulseD * 0.1;
       ctx.fillStyle = 'rgba(160,100,255,0.35)';
       ctx.beginPath();
-      ctx.arc(dp.x, dp.y, world.player.domainR, 0, TAU);
+      ctx.arc(dp.x, dp.y, dpl.domainR, 0, TAU);
       ctx.fill();
       ctx.globalAlpha = 0.55 + pulseD * 0.25;
       ctx.strokeStyle = '#d8b4ff';
       ctx.lineWidth = 2.4;
       ctx.setLineDash([8, 6]);
       ctx.beginPath();
-      ctx.arc(dp.x, dp.y, world.player.domainR, 0, TAU);
+      ctx.arc(dp.x, dp.y, dpl.domainR, 0, TAU);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
     }
 
-    /* ---------------------------------------------------------- 玩家 */
-    this.drawPlayer(ctx, world, S, opts);
+    /* ---------------------------------------------------------- 玩家（组队时先画同伴） */
+    var focusId = world.localId || (world.player && world.player.id);
+    for (var ai = 0; ai < plist.length; ai++) {
+      if (plist[ai].id === focusId) continue;
+      this.drawCombatant(ctx, world, S, plist[ai], { ally: true });
+    }
+    if (world.player) this.drawPlayer(ctx, world, S, opts);
 
     /* ---------------------------------------------------------- 特效 */
     for (var fi = 0; fi < world.fx.length; fi++) {
@@ -5528,10 +6094,34 @@
   };
 
   /* ------------------------------------------------------------ 玩家（小猪） */
+  /** 绘制任意战斗员；ally 时加名牌与青色描边 */
+  Renderer.prototype.drawCombatant = function (ctx, world, S, p, opts) {
+    opts = opts || {};
+    if (!p) return;
+    var prev = world.player;
+    world.player = p;
+    this.drawPlayer(ctx, world, S, opts);
+    world.player = prev;
+    if (opts.ally && p.hp > 0) {
+      var sp = S(p.x, p.y);
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = 'rgba(8,6,16,0.6)';
+      var label = (p.name || '同伴') + ' ' + Math.max(0, Math.round(p.hp));
+      var tw = ctx.measureText(label).width + 8;
+      roundRect(ctx, sp.x - tw / 2, sp.y - (p.r || 18) - 28, tw, 15, 5);
+      ctx.fill();
+      ctx.fillStyle = '#a8f0ff';
+      ctx.fillText(label, sp.x, sp.y - (p.r || 18) - 16);
+    }
+  };
+
   Renderer.prototype.drawPlayer = function (ctx, world, S, opts) {
     var p = world.player;
+    if (!p) return;
     var sp = S(p.x, p.y);
-    var dead = world.dead;
+    var dead = world.dead || p.hp <= 0;
     var moving = SP.len(p.vx, p.vy) > 12;
     var walkBob = Math.sin((p.walkPhase || 0)) * (moving ? 1.35 : 0);
     // 静止时用呼吸待机；走动时减弱待机、叠加步伐起伏
@@ -6089,33 +6679,19 @@
       this.drawNpc(ctx, npc, np.x, np.y, isNear, t);
     }
 
-    /* 玩家（与战斗共用角色立绘 + 待机） */
-    var pl = S(h.player.x, h.player.y);
-    var pMoving = SP.len(h.player.vx, h.player.vy) > 12;
-    var pBreath = Math.sin(t * 2.15);
-    var pShadow = 1 + pBreath * 0.08 * (pMoving ? 0.35 : 1);
-    var hubHeroSz = Math.round(Math.max(72, (h.player.r || 17) * 4.2));
-    var hubWalkBob = Math.sin(h.player.walkPhase || 0) * (pMoving ? 1.35 : 0);
-    var hubIdleE = pMoving ? 0.35 : 1;
-    var hubIdleBob = Math.sin(t * 2.15) * 1.1 * hubIdleE
-      + Math.sin(t * 4.3) * 0.25 * hubIdleE;
-    ctx.globalAlpha = 0.4;
-    ctx.fillStyle = '#000';
-    ellipse(ctx, pl.x + 2, pl.y + hubWalkBob + hubIdleBob + hubHeroSz * 0.22,
-      hubHeroSz * 0.30 * pShadow, hubHeroSz * 0.12 * (2 - pShadow)); ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.save();
-    ctx.translate(pl.x, pl.y);
-    ctx.translate(0, hubWalkBob);
-    this.charIdlePose(ctx, t, 0.4, hubIdleE);
-    // 藏身处绕身体中心朝向移动方向
-    ctx.rotate(h.player.facing + Math.PI / 2);
-    if (!this.drawCharIcon(ctx, 'hero', 0, 0, hubHeroSz)) {
-      SP.Renderer.prototype.drawPigBody.call(this, ctx, {
-        walkPhase: h.player.walkPhase, vx: h.player.vx, vy: h.player.vy, hurtFlash: 0
-      }, null, 1);
+    /* 联机同伴（先画，本地玩家盖在上面） */
+    var remotes = h.remoteList ? h.remoteList() : [];
+    for (var ri = 0; ri < remotes.length; ri++) {
+      var rp = remotes[ri];
+      if (rp.inDungeon) continue;
+      this.drawHideoutAvatar(ctx, S, rp, t, {
+        tint: 'rgba(127,227,255,0.55)',
+        label: (rp.name || '旅人') + ' Lv.' + (rp.level || 1)
+      });
     }
-    ctx.restore();
+
+    /* 本地玩家（与战斗共用角色立绘 + 待机） */
+    this.drawHideoutAvatar(ctx, S, h.player, t, { label: null, local: true });
 
     /* 交互提示环 */
     if (h.nearby) {
@@ -6144,6 +6720,54 @@
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, W, H);
     void self;
+  };
+
+  /** 藏身处玩家/同伴立绘 */
+  Renderer.prototype.drawHideoutAvatar = function (ctx, S, ent, t, opts) {
+    opts = opts || {};
+    var pl = S(ent.x, ent.y);
+    var pMoving = SP.len(ent.vx || 0, ent.vy || 0) > 12;
+    var pBreath = Math.sin(t * 2.15 + (opts.local ? 0 : 1.7));
+    var pShadow = 1 + pBreath * 0.08 * (pMoving ? 0.35 : 1);
+    var hubHeroSz = Math.round(Math.max(72, (ent.r || 17) * 4.2));
+    var hubWalkBob = Math.sin(ent.walkPhase || 0) * (pMoving ? 1.35 : 0);
+    var hubIdleE = pMoving ? 0.35 : 1;
+    var hubIdleBob = Math.sin(t * 2.15) * 1.1 * hubIdleE
+      + Math.sin(t * 4.3) * 0.25 * hubIdleE;
+    if (opts.tint) {
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = opts.tint;
+      ctx.beginPath();
+      ctx.arc(pl.x, pl.y + hubWalkBob * 0.2, hubHeroSz * 0.42, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#000';
+    ellipse(ctx, pl.x + 2, pl.y + hubWalkBob + hubIdleBob + hubHeroSz * 0.22,
+      hubHeroSz * 0.30 * pShadow, hubHeroSz * 0.12 * (2 - pShadow)); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.save();
+    ctx.translate(pl.x, pl.y);
+    ctx.translate(0, hubWalkBob);
+    this.charIdlePose(ctx, t, 0.4, hubIdleE);
+    ctx.rotate((ent.facing || 0) + Math.PI / 2);
+    if (!this.drawCharIcon(ctx, 'hero', 0, 0, hubHeroSz)) {
+      SP.Renderer.prototype.drawPigBody.call(this, ctx, {
+        walkPhase: ent.walkPhase || 0, vx: ent.vx || 0, vy: ent.vy || 0, hurtFlash: 0
+      }, null, 1);
+    }
+    ctx.restore();
+    if (opts.label) {
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = 'rgba(8,6,16,0.65)';
+      var tw = ctx.measureText(opts.label).width + 10;
+      roundRect(ctx, pl.x - tw / 2, pl.y - hubHeroSz * 0.55 - 16, tw, 16, 6);
+      ctx.fill();
+      ctx.fillStyle = opts.tint ? '#c8f0ff' : '#ffe9a8';
+      ctx.fillText(opts.label, pl.x, pl.y - hubHeroSz * 0.55 - 3);
+    }
   };
 
   /** 藏身处的装饰物 */
@@ -7116,6 +7740,21 @@
       var inp = self.$('importSaveFile');
       if (inp) inp.click();
     });
+    $('#btnOnline').addEventListener('click', function () { self.togglePanel('online'); });
+    var urlInp = doc.getElementById('onlineUrl');
+    if (urlInp && SP.OnlineClient) urlInp.value = SP.OnlineClient.defaultWsUrl();
+    $('#btnOnlineConnect').addEventListener('click', function () {
+      if (self.hooks.onOnlineConnect) self.hooks.onOnlineConnect(self.$('onlineUrl').value);
+    });
+    $('#btnOnlineDisconnect').addEventListener('click', function () {
+      if (self.hooks.onOnlineDisconnect) self.hooks.onOnlineDisconnect();
+    });
+    $('#btnPartyCreate').addEventListener('click', function () {
+      if (self.hooks.onPartyCreate) self.hooks.onPartyCreate();
+    });
+    $('#btnPartyLeave').addEventListener('click', function () {
+      if (self.hooks.onPartyLeave) self.hooks.onPartyLeave();
+    });
     $('#btnLogout').addEventListener('click', function () {
       Accounts.logout();
       self.closeAllPanels();
@@ -7255,7 +7894,7 @@
   var PANEL_IDS = {
     bag: 'panelBag', portal: 'panelPortal', forge: 'panelForge',
     shop: 'panelShop', record: 'panelRecord', bestiary: 'panelBestiary',
-    help: 'panelHelp', changelog: 'panelChangelog'
+    help: 'panelHelp', changelog: 'panelChangelog', online: 'panelOnline'
   };
 
   UI.prototype.openPanel = function (key) {
@@ -7289,6 +7928,7 @@
       this.renderStats(SP.deriveCharacter(Accounts.char()));
       this.renderBag();
     } else if (key === 'portal') this.renderPortal();
+    else if (key === 'online') this.renderOnline();
     else if (key === 'forge') this.renderForge();
     else if (key === 'shop') this.renderShop();
     else if (key === 'record') this.renderRecord();
@@ -7392,6 +8032,7 @@
   UI.prototype.tickHideout = function (dt, input) {
     if (!this.hideout) return;
     this.hideout.update(dt, input || {});
+    if (this.hideout.tickRemotes) this.hideout.tickRemotes(dt);
     var prompt = this.$('interactPrompt');
     var text = this.hideout.promptText();
     if (text) {
@@ -7399,6 +8040,73 @@
       prompt.classList.remove('hidden');
     } else if (!prompt.classList.contains('hidden')) {
       prompt.classList.add('hidden');
+    }
+  };
+
+  UI.prototype.setOnlineStatus = function (text, ok) {
+    var el = this.$('onlineStatus');
+    if (!el) return;
+    el.textContent = text || '离线';
+    el.style.color = ok ? '#9dffb0' : '';
+  };
+
+  UI.prototype.renderOnline = function () {
+    var self = this;
+    var net = this.hooks.getOnline && this.hooks.getOnline();
+    var partyEl = this.$('onlineParty');
+    var listEl = this.$('onlinePeerList');
+    if (!net || !net.connected) {
+      partyEl.textContent = '尚未接入大厅。';
+      listEl.innerHTML = '<div class="tiny muted">接入后可看到其他旅人。</div>';
+      return;
+    }
+    if (net.party && net.party.members) {
+      var names = net.party.members.map(function (m) {
+        return m.name + (m.id === net.party.leaderId ? '（队长）' : '');
+      }).join(' · ');
+      partyEl.innerHTML = '<b>当前队伍</b>：' + names +
+        '<div class="tiny muted">队长在传送门发车即可组队进本；未组队时传送门为单刷。</div>';
+    } else {
+      partyEl.innerHTML = '<b>未组队</b> · 可点「创建队伍」后邀请他人，或直接单刷副本。';
+    }
+    listEl.innerHTML = '';
+    var peers = net.peerList();
+    if (!peers.length) {
+      listEl.innerHTML = '<div class="tiny muted">大厅里暂时只有你。</div>';
+      return;
+    }
+    peers.forEach(function (p) {
+      var row = el('div', 'row', '');
+      row.style.cssText = 'justify-content:space-between;align-items:center;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.03)';
+      var left = el('div', 'tiny', '');
+      left.innerHTML = '<b>' + esc(p.name) + '</b> · Lv.' + (p.level || 1) +
+        (p.inDungeon ? ' <span class="muted">（副本中）</span>' : '') +
+        (p.partyId ? ' <span class="muted">有队伍</span>' : '');
+      row.appendChild(left);
+      var inv = el('button', 'ghost tiny-btn', '邀请');
+      inv.disabled = !!(p.inDungeon || p.partyId || !(net.party && net.party.leaderId === net.id));
+      inv.addEventListener('click', function () {
+        if (self.hooks.onPartyInvite) self.hooks.onPartyInvite(p.id);
+      });
+      row.appendChild(inv);
+      listEl.appendChild(row);
+    });
+  };
+
+  UI.prototype.renderPortalPartyBar = function () {
+    var bar = this.$('portalPartyBar');
+    if (!bar) return;
+    var net = this.hooks.getOnline && this.hooks.getOnline();
+    if (!net || !net.connected) {
+      bar.textContent = '当前：单机模式';
+      return;
+    }
+    if (net.party && net.party.members && net.party.members.length > 1) {
+      var isLeader = net.party.leaderId === net.id;
+      bar.innerHTML = '联机组队 · ' + net.party.members.length + ' 人' +
+        (isLeader ? ' · 你是队长，点进入将带领全队出发' : ' · 等待队长发车');
+    } else {
+      bar.textContent = '联机已接入 · 将以单刷进入（可先在「联机」面板组队）';
     }
   };
 
@@ -8425,6 +9133,7 @@
     var wrap = this.$('biomeList');
     var self = this;
     wrap.innerHTML = '';
+    this.renderPortalPartyBar();
     var unlocked = P.unlockedBiomes(ch);
 
     SP.BIOME_ORDER.forEach(function (key) {
@@ -8498,7 +9207,14 @@
         item.appendChild(ctrl);
       }
 
-      var go = el('button', 'primary go', '进入第 <b id="fp-' + key + '">' + pick + '</b> 层');
+      var net = self.hooks.getOnline && self.hooks.getOnline();
+      var inParty = !!(net && net.connected && net.party && net.party.members && net.party.members.length > 1);
+      var isLeader = inParty && net.party.leaderId === net.id;
+      var goLabel = inParty
+        ? (isLeader ? '组队进入第 ' : '等待队长 · 第 ')
+        : '进入第 ';
+      var go = el('button', 'primary go', goLabel + '<b id="fp-' + key + '">' + pick + '</b> 层');
+      if (inParty && !isLeader) go.disabled = true;
       go.addEventListener('click', function () {
         self.sound && self.sound.play('click');
         if (self.hooks.onEnterDungeon) self.hooks.onEnterDungeon(key, self.floorPick[key]);
@@ -9072,6 +9788,15 @@
   var autoAim = false;    // 已锁定附近敌人（可能尚在刀长外，仅转向）
   var AUTO_KEY = 'spm_auto_atk';
 
+  /* 联机：大厅现身 + 房主权威组队副本 */
+  var online = null;
+  var onlineRole = null;      // 'host' | 'guest' | null
+  var onlineHostId = null;
+  var remoteInputs = {};      // guestId -> 最新输入（房主用）
+  var snapAcc = 0;
+  var inputAcc = 0;
+  var awaitingOnlineStart = false;
+
   /* ------------------------------------------------------------------ 输入 */
   function keyName(ev) { return (ev.key || '').toLowerCase(); }
 
@@ -9503,8 +10228,210 @@
     }
   }
 
+  /* ---------------------------------------------------------------- 联机 */
+  function refreshOnlineUi() {
+    if (ui.activePanel === 'online') ui.renderOnline();
+    if (ui.activePanel === 'portal') ui.renderPortal();
+  }
+
+  function syncHideoutRemotes() {
+    if (!ui.hideout || !online) return;
+    ui.hideout.syncRemotes(online.peerList(), online.id);
+  }
+
+  function pushCharSync() {
+    var rec = SP.Accounts.current;
+    if (!online || !online.connected || !rec) return;
+    online.syncCharacter(rec.name, rec.character);
+  }
+
+  function wireOnline(client) {
+    online = client;
+    online.on('welcome', function () {
+      ui.setOnlineStatus('已接入 · ' + (online.id || ''), true);
+      pushCharSync();
+      syncHideoutRemotes();
+      refreshOnlineUi();
+      ui.flash('已接入联机大厅', true);
+    });
+    online.on('close', function () {
+      ui.setOnlineStatus('离线', false);
+      onlineRole = null;
+      onlineHostId = null;
+      remoteInputs = {};
+      awaitingOnlineStart = false;
+      if (ui.hideout) ui.hideout.syncRemotes([], null);
+      refreshOnlineUi();
+    });
+    online.on('error', function (e) {
+      ui.setOnlineStatus('连接失败', false);
+      ui.flash((e && e.reason) || '联机失败');
+    });
+    online.on('peers', function () { syncHideoutRemotes(); refreshOnlineUi(); });
+    online.on('peer_join', function () { syncHideoutRemotes(); refreshOnlineUi(); });
+    online.on('peer_leave', function () { syncHideoutRemotes(); refreshOnlineUi(); });
+    online.on('hub_pos', function (msg) {
+      if (ui.hideout && ui.hideout.applyRemotePos) ui.hideout.applyRemotePos(msg);
+    });
+    online.on('party', function () {
+      pushCharSync();
+      refreshOnlineUi();
+    });
+    online.on('invite', function (msg) {
+      var ok = global.confirm && global.confirm(
+        (msg.fromName || '旅人') + ' 邀请你组队，是否加入？'
+      );
+      if (ok) online.acceptInvite(msg.partyId);
+      else online.pendingInvite = null;
+    });
+    online.on('toast', function (msg) {
+      if (msg && msg.text) ui.flash(msg.text, true);
+    });
+    online.on('dungeon_start', function (msg) { beginOnlineDungeon(msg); });
+    online.on('dungeon_input', function (msg) {
+      if (onlineRole !== 'host' || !msg || !msg.fromId) return;
+      remoteInputs[msg.fromId] = msg.input || {};
+    });
+    online.on('dungeon_snap', function (msg) {
+      if (onlineRole !== 'guest' || !world || !msg || !msg.snap) return;
+      world.applySnapshot(msg.snap);
+      var focus = world.focusLocal();
+      if (focus) {
+        world.camera.x = SP.lerp(world.camera.x, focus.x, 0.45);
+        world.camera.y = SP.lerp(world.camera.y, focus.y, 0.45);
+      }
+      if (world.cleared && !runBanked) finishRun(true);
+      else if (world.dead && !runBanked) finishRun(false);
+    });
+    online.on('dungeon_end', function (msg) {
+      if (onlineRole !== 'guest') return;
+      var cleared = !!(msg && msg.result && msg.result.cleared);
+      if (world && !runBanked) finishRun(cleared);
+      onlineRole = null;
+      onlineHostId = null;
+    });
+  }
+
+  function connectOnline(url) {
+    if (!SP.OnlineClient) {
+      ui.flash('联机模块未加载');
+      return;
+    }
+    var rec = SP.Accounts.current;
+    if (!rec) {
+      ui.flash('请先登录');
+      return;
+    }
+    if (online) {
+      try { online.disconnect(); } catch (e) { /* ignore */ }
+    }
+    var client = new SP.OnlineClient({ url: url || SP.OnlineClient.defaultWsUrl() });
+    wireOnline(client);
+    ui.setOnlineStatus('连接中…', false);
+    var h = ui.hideout;
+    client.connect({
+      name: rec.name,
+      level: rec.character.level,
+      x: h ? h.player.x : 1100,
+      y: h ? h.player.y : 900,
+      facing: h ? h.player.facing : -Math.PI / 2
+    });
+  }
+
+  function disconnectOnline() {
+    if (online) online.disconnect();
+    online = null;
+    onlineRole = null;
+    onlineHostId = null;
+    remoteInputs = {};
+    awaitingOnlineStart = false;
+    ui.setOnlineStatus('离线', false);
+    if (ui.hideout) ui.hideout.syncRemotes([], null);
+    refreshOnlineUi();
+  }
+
+  function requestOnlineDungeon(biome, floor) {
+    if (!online || !online.connected) return false;
+    var rec = SP.Accounts.current;
+    if (!rec) return false;
+    var inParty = online.party && online.party.members && online.party.members.length > 1;
+    if (inParty && online.party.leaderId !== online.id) {
+      ui.flash('等待队长发车');
+      return true;
+    }
+    pushCharSync();
+    var seed = (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+    var roster = [{
+      id: online.id,
+      name: rec.name,
+      character: SP.OnlineClient.packCharacter(rec.character)
+    }];
+    awaitingOnlineStart = true;
+    online.startDungeon({ biome: biome, floor: floor, seed: seed, roster: roster });
+    return true;
+  }
+
+  function beginOnlineDungeon(msg) {
+    var rec = SP.Accounts.current;
+    if (!rec || !msg) return;
+    awaitingOnlineStart = false;
+    onlineHostId = msg.hostId;
+    onlineRole = (msg.hostId === online.id) ? 'host' : 'guest';
+    remoteInputs = {};
+    snapAcc = 0;
+    inputAcc = 0;
+
+    var roster = (msg.roster || []).map(function (slot) {
+      var ch = slot.character || { level: 1, equipped: {}, steaks: 3 };
+      // 本地玩家用完整存档（含材料进度），同伴用同步包
+      if (slot.id === online.id) {
+        ch = rec.character;
+      }
+      return { id: slot.id, name: slot.name || '旅人', character: ch };
+    });
+
+    var ch = rec.character;
+    var carry = Math.min(ch.steaks, 5);
+    world = new SP.World({
+      seed: msg.seed >>> 0,
+      character: ch,
+      name: rec.name,
+      localId: online.id,
+      party: roster,
+      dungeon: { biome: msg.biome, floor: msg.floor },
+      steaks: carry
+    });
+    ch.steaks = Math.max(0, ch.steaks - carry);
+    SP.Accounts.persist();
+
+    runBanked = false;
+    lastSummary = null;
+    ui.resetHud();
+    ui.setHudName(rec.name, world.biome.name, world.floor);
+    ui.hideResult();
+    ui.showPause(false);
+    ui.closeAllPanels();
+    ui.showGame();
+    renderer.resize();
+    paused = false;
+    running = true;
+    input.attack = false; input.quake = false; input.bless = false; input.use = false; input.dash = false;
+    input.weaponSkill = false;
+    autoLock = false;
+    autoAim = false;
+    ui.banner(
+      onlineRole === 'host'
+        ? (roster.length > 1 ? '组队出发 · 你是房主' : '联机单刷')
+        : '组队出发 · 跟随房主',
+      '#9dffb0'
+    );
+  }
+
   /* ---------------------------------------------------------------- 流程 */
   function startRun(biome, floor) {
+    if (online && online.connected) {
+      if (requestOnlineDungeon(biome, floor)) return;
+    }
     var rec = SP.Accounts.current;
     if (!rec) return;
     var ch = rec.character;
@@ -9532,6 +10459,8 @@
     input.weaponSkill = false;
     autoLock = false;
     autoAim = false;
+    onlineRole = null;
+    onlineHostId = null;
   }
 
   /** 一局结束（通关或阵亡）：结算入账，只执行一次 */
@@ -9544,21 +10473,50 @@
     SP.Accounts.persist();
     lastSummary = { summary: summary, bank: bank, biome: world.biomeKey, floor: world.floor };
     ui.showResult(summary, !!cleared);
+    if (online && online.connected && onlineRole === 'host') {
+      online.sendDungeonEnd({ cleared: !!cleared, biome: world.biomeKey, floor: world.floor });
+    }
+    if (onlineRole) {
+      onlineRole = null;
+      onlineHostId = null;
+      remoteInputs = {};
+    }
   }
 
   function togglePause(force) {
     if (!running || !world || world.dead || ui.isResultOpen()) return;
+    // 组队副本：仅房主可暂停本地模拟；客机跟随快照，不单独暂停权威
+    if (onlineRole === 'guest') return;
     paused = force === undefined ? !paused : !!force;
     ui.showPause(paused);
   }
 
   function backToHub() {
+    if (online && online.connected && onlineRole === 'host' && world && !runBanked) {
+      online.sendDungeonEnd({ cleared: false, quit: true });
+    }
     running = false;
     world = null;
     hideoutTarget = null;
+    onlineRole = null;
+    onlineHostId = null;
+    remoteInputs = {};
+    awaitingOnlineStart = false;
     ui.hideResult();
     ui.showPause(false);
     ui.enterHideout();
+    syncHideoutRemotes();
+    pushCharSync();
+  }
+
+  function packNetInput(inp) {
+    return {
+      mx: inp.mx || 0, my: inp.my || 0,
+      aimAngle: inp.aimAngle, aimSnap: !!inp.aimSnap,
+      attack: !!inp.attack, quake: !!inp.quake, bless: !!inp.bless,
+      use: !!inp.use, dash: !!inp.dash, weaponSkill: !!inp.weaponSkill,
+      viewW: inp.viewW || 0, viewH: inp.viewH || 0
+    };
   }
 
   function loop(now) {
@@ -9575,6 +10533,10 @@
     /* ---- 藏身处：走动的安全区，面板打开时冻结移动 ---- */
     if (ui.screen === 'hideout') {
       ui.tickHideout(dt, ui.isPanelOpen() ? { mx: 0, my: 0 } : readHideoutInput());
+      if (online && online.connected) {
+        var rec = SP.Accounts.current;
+        online.tickHub(dt, ui.hideout, rec && rec.character);
+      }
       ui.drawHideout(hideRenderer);
       return;
     }
@@ -9584,8 +10546,38 @@
     var blocked = paused || ui.isResultOpen();
 
     if (running && !world.dead && !world.cleared && !blocked) {
-      world.update(dt, demo ? demoInput() : readInput());
-      consumeEvents();
+      var localInp = demo ? demoInput() : readInput();
+      if (onlineRole === 'guest') {
+        inputAcc += dt;
+        if (inputAcc >= 0.05) {
+          inputAcc = 0;
+          online.sendDungeonInput(packNetInput(localInp));
+        }
+        world.updateVisuals(dt);
+      } else if (onlineRole === 'host' && world.players.length > 1) {
+        var multi = { __multi: true };
+        multi[online.id] = localInp;
+        Object.keys(remoteInputs).forEach(function (id) {
+          multi[id] = remoteInputs[id] || {};
+        });
+        world.update(dt, multi);
+        consumeEvents();
+        snapAcc += dt;
+        if (snapAcc >= 0.1) {
+          snapAcc = 0;
+          online.sendDungeonSnap(world.snapshot());
+        }
+      } else {
+        world.update(dt, localInp);
+        consumeEvents();
+        if (onlineRole === 'host') {
+          snapAcc += dt;
+          if (snapAcc >= 0.15) {
+            snapAcc = 0;
+            online.sendDungeonSnap(world.snapshot());
+          }
+        }
+      }
     } else {
       world.updateVisuals(dt);
       if (running && (world.dead || world.cleared)) consumeEvents();
@@ -9624,7 +10616,25 @@
         var f = lastSummary ? lastSummary.floor : 1;
         startRun(b, f);
       },
-      onBackHub: function () { backToHub(); }
+      onBackHub: function () { backToHub(); },
+      getOnline: function () { return online; },
+      onOnlineConnect: function (url) { connectOnline(url); },
+      onOnlineDisconnect: function () { disconnectOnline(); },
+      onPartyCreate: function () {
+        if (!online || !online.connected) return ui.flash('请先接入联机大厅');
+        pushCharSync();
+        online.createParty();
+        ui.flash('已创建队伍', true);
+      },
+      onPartyLeave: function () {
+        if (!online || !online.connected) return;
+        online.leaveParty();
+      },
+      onPartyInvite: function (id) {
+        if (!online || !online.connected) return;
+        online.invite(id);
+        ui.flash('已发送邀请', true);
+      }
     });
     ui.sound = sound;
 
@@ -9796,7 +10806,10 @@
     ui: ui,
     sound: sound,
     renderer: function () { return renderer; },
-    finishRun: finishRun
+    finishRun: finishRun,
+    getOnline: function () { return online; },
+    connectOnline: connectOnline,
+    disconnectOnline: disconnectOnline
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 

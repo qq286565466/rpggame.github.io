@@ -33,6 +33,15 @@
   var autoAim = false;    // 已锁定附近敌人（可能尚在刀长外，仅转向）
   var AUTO_KEY = 'spm_auto_atk';
 
+  /* 联机：大厅现身 + 房主权威组队副本 */
+  var online = null;
+  var onlineRole = null;      // 'host' | 'guest' | null
+  var onlineHostId = null;
+  var remoteInputs = {};      // guestId -> 最新输入（房主用）
+  var snapAcc = 0;
+  var inputAcc = 0;
+  var awaitingOnlineStart = false;
+
   /* ------------------------------------------------------------------ 输入 */
   function keyName(ev) { return (ev.key || '').toLowerCase(); }
 
@@ -464,8 +473,210 @@
     }
   }
 
+  /* ---------------------------------------------------------------- 联机 */
+  function refreshOnlineUi() {
+    if (ui.activePanel === 'online') ui.renderOnline();
+    if (ui.activePanel === 'portal') ui.renderPortal();
+  }
+
+  function syncHideoutRemotes() {
+    if (!ui.hideout || !online) return;
+    ui.hideout.syncRemotes(online.peerList(), online.id);
+  }
+
+  function pushCharSync() {
+    var rec = SP.Accounts.current;
+    if (!online || !online.connected || !rec) return;
+    online.syncCharacter(rec.name, rec.character);
+  }
+
+  function wireOnline(client) {
+    online = client;
+    online.on('welcome', function () {
+      ui.setOnlineStatus('已接入 · ' + (online.id || ''), true);
+      pushCharSync();
+      syncHideoutRemotes();
+      refreshOnlineUi();
+      ui.flash('已接入联机大厅', true);
+    });
+    online.on('close', function () {
+      ui.setOnlineStatus('离线', false);
+      onlineRole = null;
+      onlineHostId = null;
+      remoteInputs = {};
+      awaitingOnlineStart = false;
+      if (ui.hideout) ui.hideout.syncRemotes([], null);
+      refreshOnlineUi();
+    });
+    online.on('error', function (e) {
+      ui.setOnlineStatus('连接失败', false);
+      ui.flash((e && e.reason) || '联机失败');
+    });
+    online.on('peers', function () { syncHideoutRemotes(); refreshOnlineUi(); });
+    online.on('peer_join', function () { syncHideoutRemotes(); refreshOnlineUi(); });
+    online.on('peer_leave', function () { syncHideoutRemotes(); refreshOnlineUi(); });
+    online.on('hub_pos', function (msg) {
+      if (ui.hideout && ui.hideout.applyRemotePos) ui.hideout.applyRemotePos(msg);
+    });
+    online.on('party', function () {
+      pushCharSync();
+      refreshOnlineUi();
+    });
+    online.on('invite', function (msg) {
+      var ok = global.confirm && global.confirm(
+        (msg.fromName || '旅人') + ' 邀请你组队，是否加入？'
+      );
+      if (ok) online.acceptInvite(msg.partyId);
+      else online.pendingInvite = null;
+    });
+    online.on('toast', function (msg) {
+      if (msg && msg.text) ui.flash(msg.text, true);
+    });
+    online.on('dungeon_start', function (msg) { beginOnlineDungeon(msg); });
+    online.on('dungeon_input', function (msg) {
+      if (onlineRole !== 'host' || !msg || !msg.fromId) return;
+      remoteInputs[msg.fromId] = msg.input || {};
+    });
+    online.on('dungeon_snap', function (msg) {
+      if (onlineRole !== 'guest' || !world || !msg || !msg.snap) return;
+      world.applySnapshot(msg.snap);
+      var focus = world.focusLocal();
+      if (focus) {
+        world.camera.x = SP.lerp(world.camera.x, focus.x, 0.45);
+        world.camera.y = SP.lerp(world.camera.y, focus.y, 0.45);
+      }
+      if (world.cleared && !runBanked) finishRun(true);
+      else if (world.dead && !runBanked) finishRun(false);
+    });
+    online.on('dungeon_end', function (msg) {
+      if (onlineRole !== 'guest') return;
+      var cleared = !!(msg && msg.result && msg.result.cleared);
+      if (world && !runBanked) finishRun(cleared);
+      onlineRole = null;
+      onlineHostId = null;
+    });
+  }
+
+  function connectOnline(url) {
+    if (!SP.OnlineClient) {
+      ui.flash('联机模块未加载');
+      return;
+    }
+    var rec = SP.Accounts.current;
+    if (!rec) {
+      ui.flash('请先登录');
+      return;
+    }
+    if (online) {
+      try { online.disconnect(); } catch (e) { /* ignore */ }
+    }
+    var client = new SP.OnlineClient({ url: url || SP.OnlineClient.defaultWsUrl() });
+    wireOnline(client);
+    ui.setOnlineStatus('连接中…', false);
+    var h = ui.hideout;
+    client.connect({
+      name: rec.name,
+      level: rec.character.level,
+      x: h ? h.player.x : 1100,
+      y: h ? h.player.y : 900,
+      facing: h ? h.player.facing : -Math.PI / 2
+    });
+  }
+
+  function disconnectOnline() {
+    if (online) online.disconnect();
+    online = null;
+    onlineRole = null;
+    onlineHostId = null;
+    remoteInputs = {};
+    awaitingOnlineStart = false;
+    ui.setOnlineStatus('离线', false);
+    if (ui.hideout) ui.hideout.syncRemotes([], null);
+    refreshOnlineUi();
+  }
+
+  function requestOnlineDungeon(biome, floor) {
+    if (!online || !online.connected) return false;
+    var rec = SP.Accounts.current;
+    if (!rec) return false;
+    var inParty = online.party && online.party.members && online.party.members.length > 1;
+    if (inParty && online.party.leaderId !== online.id) {
+      ui.flash('等待队长发车');
+      return true;
+    }
+    pushCharSync();
+    var seed = (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+    var roster = [{
+      id: online.id,
+      name: rec.name,
+      character: SP.OnlineClient.packCharacter(rec.character)
+    }];
+    awaitingOnlineStart = true;
+    online.startDungeon({ biome: biome, floor: floor, seed: seed, roster: roster });
+    return true;
+  }
+
+  function beginOnlineDungeon(msg) {
+    var rec = SP.Accounts.current;
+    if (!rec || !msg) return;
+    awaitingOnlineStart = false;
+    onlineHostId = msg.hostId;
+    onlineRole = (msg.hostId === online.id) ? 'host' : 'guest';
+    remoteInputs = {};
+    snapAcc = 0;
+    inputAcc = 0;
+
+    var roster = (msg.roster || []).map(function (slot) {
+      var ch = slot.character || { level: 1, equipped: {}, steaks: 3 };
+      // 本地玩家用完整存档（含材料进度），同伴用同步包
+      if (slot.id === online.id) {
+        ch = rec.character;
+      }
+      return { id: slot.id, name: slot.name || '旅人', character: ch };
+    });
+
+    var ch = rec.character;
+    var carry = Math.min(ch.steaks, 5);
+    world = new SP.World({
+      seed: msg.seed >>> 0,
+      character: ch,
+      name: rec.name,
+      localId: online.id,
+      party: roster,
+      dungeon: { biome: msg.biome, floor: msg.floor },
+      steaks: carry
+    });
+    ch.steaks = Math.max(0, ch.steaks - carry);
+    SP.Accounts.persist();
+
+    runBanked = false;
+    lastSummary = null;
+    ui.resetHud();
+    ui.setHudName(rec.name, world.biome.name, world.floor);
+    ui.hideResult();
+    ui.showPause(false);
+    ui.closeAllPanels();
+    ui.showGame();
+    renderer.resize();
+    paused = false;
+    running = true;
+    input.attack = false; input.quake = false; input.bless = false; input.use = false; input.dash = false;
+    input.weaponSkill = false;
+    autoLock = false;
+    autoAim = false;
+    ui.banner(
+      onlineRole === 'host'
+        ? (roster.length > 1 ? '组队出发 · 你是房主' : '联机单刷')
+        : '组队出发 · 跟随房主',
+      '#9dffb0'
+    );
+  }
+
   /* ---------------------------------------------------------------- 流程 */
   function startRun(biome, floor) {
+    if (online && online.connected) {
+      if (requestOnlineDungeon(biome, floor)) return;
+    }
     var rec = SP.Accounts.current;
     if (!rec) return;
     var ch = rec.character;
@@ -493,6 +704,8 @@
     input.weaponSkill = false;
     autoLock = false;
     autoAim = false;
+    onlineRole = null;
+    onlineHostId = null;
   }
 
   /** 一局结束（通关或阵亡）：结算入账，只执行一次 */
@@ -505,21 +718,50 @@
     SP.Accounts.persist();
     lastSummary = { summary: summary, bank: bank, biome: world.biomeKey, floor: world.floor };
     ui.showResult(summary, !!cleared);
+    if (online && online.connected && onlineRole === 'host') {
+      online.sendDungeonEnd({ cleared: !!cleared, biome: world.biomeKey, floor: world.floor });
+    }
+    if (onlineRole) {
+      onlineRole = null;
+      onlineHostId = null;
+      remoteInputs = {};
+    }
   }
 
   function togglePause(force) {
     if (!running || !world || world.dead || ui.isResultOpen()) return;
+    // 组队副本：仅房主可暂停本地模拟；客机跟随快照，不单独暂停权威
+    if (onlineRole === 'guest') return;
     paused = force === undefined ? !paused : !!force;
     ui.showPause(paused);
   }
 
   function backToHub() {
+    if (online && online.connected && onlineRole === 'host' && world && !runBanked) {
+      online.sendDungeonEnd({ cleared: false, quit: true });
+    }
     running = false;
     world = null;
     hideoutTarget = null;
+    onlineRole = null;
+    onlineHostId = null;
+    remoteInputs = {};
+    awaitingOnlineStart = false;
     ui.hideResult();
     ui.showPause(false);
     ui.enterHideout();
+    syncHideoutRemotes();
+    pushCharSync();
+  }
+
+  function packNetInput(inp) {
+    return {
+      mx: inp.mx || 0, my: inp.my || 0,
+      aimAngle: inp.aimAngle, aimSnap: !!inp.aimSnap,
+      attack: !!inp.attack, quake: !!inp.quake, bless: !!inp.bless,
+      use: !!inp.use, dash: !!inp.dash, weaponSkill: !!inp.weaponSkill,
+      viewW: inp.viewW || 0, viewH: inp.viewH || 0
+    };
   }
 
   function loop(now) {
@@ -536,6 +778,10 @@
     /* ---- 藏身处：走动的安全区，面板打开时冻结移动 ---- */
     if (ui.screen === 'hideout') {
       ui.tickHideout(dt, ui.isPanelOpen() ? { mx: 0, my: 0 } : readHideoutInput());
+      if (online && online.connected) {
+        var rec = SP.Accounts.current;
+        online.tickHub(dt, ui.hideout, rec && rec.character);
+      }
       ui.drawHideout(hideRenderer);
       return;
     }
@@ -545,8 +791,38 @@
     var blocked = paused || ui.isResultOpen();
 
     if (running && !world.dead && !world.cleared && !blocked) {
-      world.update(dt, demo ? demoInput() : readInput());
-      consumeEvents();
+      var localInp = demo ? demoInput() : readInput();
+      if (onlineRole === 'guest') {
+        inputAcc += dt;
+        if (inputAcc >= 0.05) {
+          inputAcc = 0;
+          online.sendDungeonInput(packNetInput(localInp));
+        }
+        world.updateVisuals(dt);
+      } else if (onlineRole === 'host' && world.players.length > 1) {
+        var multi = { __multi: true };
+        multi[online.id] = localInp;
+        Object.keys(remoteInputs).forEach(function (id) {
+          multi[id] = remoteInputs[id] || {};
+        });
+        world.update(dt, multi);
+        consumeEvents();
+        snapAcc += dt;
+        if (snapAcc >= 0.1) {
+          snapAcc = 0;
+          online.sendDungeonSnap(world.snapshot());
+        }
+      } else {
+        world.update(dt, localInp);
+        consumeEvents();
+        if (onlineRole === 'host') {
+          snapAcc += dt;
+          if (snapAcc >= 0.15) {
+            snapAcc = 0;
+            online.sendDungeonSnap(world.snapshot());
+          }
+        }
+      }
     } else {
       world.updateVisuals(dt);
       if (running && (world.dead || world.cleared)) consumeEvents();
@@ -585,7 +861,25 @@
         var f = lastSummary ? lastSummary.floor : 1;
         startRun(b, f);
       },
-      onBackHub: function () { backToHub(); }
+      onBackHub: function () { backToHub(); },
+      getOnline: function () { return online; },
+      onOnlineConnect: function (url) { connectOnline(url); },
+      onOnlineDisconnect: function () { disconnectOnline(); },
+      onPartyCreate: function () {
+        if (!online || !online.connected) return ui.flash('请先接入联机大厅');
+        pushCharSync();
+        online.createParty();
+        ui.flash('已创建队伍', true);
+      },
+      onPartyLeave: function () {
+        if (!online || !online.connected) return;
+        online.leaveParty();
+      },
+      onPartyInvite: function (id) {
+        if (!online || !online.connected) return;
+        online.invite(id);
+        ui.flash('已发送邀请', true);
+      }
     });
     ui.sound = sound;
 
@@ -757,6 +1051,9 @@
     ui: ui,
     sound: sound,
     renderer: function () { return renderer; },
-    finishRun: finishRun
+    finishRun: finishRun,
+    getOnline: function () { return online; },
+    connectOnline: connectOnline,
+    disconnectOnline: disconnectOnline
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -274,6 +274,21 @@
       var inp = self.$('importSaveFile');
       if (inp) inp.click();
     });
+    $('#btnOnline').addEventListener('click', function () { self.togglePanel('online'); });
+    var urlInp = doc.getElementById('onlineUrl');
+    if (urlInp && SP.OnlineClient) urlInp.value = SP.OnlineClient.defaultWsUrl();
+    $('#btnOnlineConnect').addEventListener('click', function () {
+      if (self.hooks.onOnlineConnect) self.hooks.onOnlineConnect(self.$('onlineUrl').value);
+    });
+    $('#btnOnlineDisconnect').addEventListener('click', function () {
+      if (self.hooks.onOnlineDisconnect) self.hooks.onOnlineDisconnect();
+    });
+    $('#btnPartyCreate').addEventListener('click', function () {
+      if (self.hooks.onPartyCreate) self.hooks.onPartyCreate();
+    });
+    $('#btnPartyLeave').addEventListener('click', function () {
+      if (self.hooks.onPartyLeave) self.hooks.onPartyLeave();
+    });
     $('#btnLogout').addEventListener('click', function () {
       Accounts.logout();
       self.closeAllPanels();
@@ -413,7 +428,7 @@
   var PANEL_IDS = {
     bag: 'panelBag', portal: 'panelPortal', forge: 'panelForge',
     shop: 'panelShop', record: 'panelRecord', bestiary: 'panelBestiary',
-    help: 'panelHelp', changelog: 'panelChangelog'
+    help: 'panelHelp', changelog: 'panelChangelog', online: 'panelOnline'
   };
 
   UI.prototype.openPanel = function (key) {
@@ -447,6 +462,7 @@
       this.renderStats(SP.deriveCharacter(Accounts.char()));
       this.renderBag();
     } else if (key === 'portal') this.renderPortal();
+    else if (key === 'online') this.renderOnline();
     else if (key === 'forge') this.renderForge();
     else if (key === 'shop') this.renderShop();
     else if (key === 'record') this.renderRecord();
@@ -550,6 +566,7 @@
   UI.prototype.tickHideout = function (dt, input) {
     if (!this.hideout) return;
     this.hideout.update(dt, input || {});
+    if (this.hideout.tickRemotes) this.hideout.tickRemotes(dt);
     var prompt = this.$('interactPrompt');
     var text = this.hideout.promptText();
     if (text) {
@@ -557,6 +574,73 @@
       prompt.classList.remove('hidden');
     } else if (!prompt.classList.contains('hidden')) {
       prompt.classList.add('hidden');
+    }
+  };
+
+  UI.prototype.setOnlineStatus = function (text, ok) {
+    var el = this.$('onlineStatus');
+    if (!el) return;
+    el.textContent = text || '离线';
+    el.style.color = ok ? '#9dffb0' : '';
+  };
+
+  UI.prototype.renderOnline = function () {
+    var self = this;
+    var net = this.hooks.getOnline && this.hooks.getOnline();
+    var partyEl = this.$('onlineParty');
+    var listEl = this.$('onlinePeerList');
+    if (!net || !net.connected) {
+      partyEl.textContent = '尚未接入大厅。';
+      listEl.innerHTML = '<div class="tiny muted">接入后可看到其他旅人。</div>';
+      return;
+    }
+    if (net.party && net.party.members) {
+      var names = net.party.members.map(function (m) {
+        return m.name + (m.id === net.party.leaderId ? '（队长）' : '');
+      }).join(' · ');
+      partyEl.innerHTML = '<b>当前队伍</b>：' + names +
+        '<div class="tiny muted">队长在传送门发车即可组队进本；未组队时传送门为单刷。</div>';
+    } else {
+      partyEl.innerHTML = '<b>未组队</b> · 可点「创建队伍」后邀请他人，或直接单刷副本。';
+    }
+    listEl.innerHTML = '';
+    var peers = net.peerList();
+    if (!peers.length) {
+      listEl.innerHTML = '<div class="tiny muted">大厅里暂时只有你。</div>';
+      return;
+    }
+    peers.forEach(function (p) {
+      var row = el('div', 'row', '');
+      row.style.cssText = 'justify-content:space-between;align-items:center;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.03)';
+      var left = el('div', 'tiny', '');
+      left.innerHTML = '<b>' + esc(p.name) + '</b> · Lv.' + (p.level || 1) +
+        (p.inDungeon ? ' <span class="muted">（副本中）</span>' : '') +
+        (p.partyId ? ' <span class="muted">有队伍</span>' : '');
+      row.appendChild(left);
+      var inv = el('button', 'ghost tiny-btn', '邀请');
+      inv.disabled = !!(p.inDungeon || p.partyId || !(net.party && net.party.leaderId === net.id));
+      inv.addEventListener('click', function () {
+        if (self.hooks.onPartyInvite) self.hooks.onPartyInvite(p.id);
+      });
+      row.appendChild(inv);
+      listEl.appendChild(row);
+    });
+  };
+
+  UI.prototype.renderPortalPartyBar = function () {
+    var bar = this.$('portalPartyBar');
+    if (!bar) return;
+    var net = this.hooks.getOnline && this.hooks.getOnline();
+    if (!net || !net.connected) {
+      bar.textContent = '当前：单机模式';
+      return;
+    }
+    if (net.party && net.party.members && net.party.members.length > 1) {
+      var isLeader = net.party.leaderId === net.id;
+      bar.innerHTML = '联机组队 · ' + net.party.members.length + ' 人' +
+        (isLeader ? ' · 你是队长，点进入将带领全队出发' : ' · 等待队长发车');
+    } else {
+      bar.textContent = '联机已接入 · 将以单刷进入（可先在「联机」面板组队）';
     }
   };
 
@@ -1583,6 +1667,7 @@
     var wrap = this.$('biomeList');
     var self = this;
     wrap.innerHTML = '';
+    this.renderPortalPartyBar();
     var unlocked = P.unlockedBiomes(ch);
 
     SP.BIOME_ORDER.forEach(function (key) {
@@ -1656,7 +1741,14 @@
         item.appendChild(ctrl);
       }
 
-      var go = el('button', 'primary go', '进入第 <b id="fp-' + key + '">' + pick + '</b> 层');
+      var net = self.hooks.getOnline && self.hooks.getOnline();
+      var inParty = !!(net && net.connected && net.party && net.party.members && net.party.members.length > 1);
+      var isLeader = inParty && net.party.leaderId === net.id;
+      var goLabel = inParty
+        ? (isLeader ? '组队进入第 ' : '等待队长 · 第 ')
+        : '进入第 ';
+      var go = el('button', 'primary go', goLabel + '<b id="fp-' + key + '">' + pick + '</b> 层');
+      if (inParty && !isLeader) go.disabled = true;
       go.addEventListener('click', function () {
         self.sound && self.sound.play('click');
         if (self.hooks.onEnterDungeon) self.hooks.onEnterDungeon(key, self.floorPick[key]);
