@@ -123,6 +123,7 @@
     if (has('swift')) move *= 1.12;
     if (has('greedheart')) { greed += 0.25; luck += 0.25; }
     if (has('vampiric')) lifesteal *= 2;
+    if (has('overcharge')) skillDmg += 0.30;
 
     var weapon = (ch.equipped && ch.equipped.weapon) || null;
     var wpn = SP.Items.weaponProfile(weapon);
@@ -530,6 +531,13 @@
 
     this.rollLoot(e);
 
+    // 传说武器：渴血
+    if (this.hasUnique('bloodthirst')) {
+      var heal = p.maxHp * 0.05;
+      p.hp = Math.min(p.maxHp, p.hp + heal);
+      this.addText(p.x, p.y - 36, '+' + Math.round(heal), '#ff8a9a', 15, -28);
+    }
+
     // 传说：时空回响
     if (this.hasUnique('echo') && this.rng() < 0.12) {
       this.ring(p.x, p.y, 12, 150, 0.35, '#7fe3ff', 5);
@@ -650,6 +658,11 @@
 
     if (wp.style === 'shot' || wp.style === 'bolt') {
       this.fireWeaponShot(aimAngle, wp);
+      // 传说武器：连星 — 额外两发侧弹
+      if (this.hasUnique('multishot')) {
+        this.fireWeaponShot(aimAngle - 0.24, wp, { dmgScale: 0.55 });
+        this.fireWeaponShot(aimAngle + 0.24, wp, { dmgScale: 0.55 });
+      }
       return;
     }
 
@@ -710,9 +723,11 @@
     }
   };
 
-  World.prototype.fireWeaponShot = function (aimAngle, wp) {
+  World.prototype.fireWeaponShot = function (aimAngle, wp, opts) {
+    opts = opts || {};
     var p = this.player;
     var color = wp.style === 'bolt' ? '#9ad8ff' : '#ffe0a0';
+    var dmgScale = opts.dmgScale == null ? 1 : opts.dmgScale;
     // 杖/弓出手时给一点枪口闪光
     this.burst(
       p.x + Math.cos(aimAngle) * 22,
@@ -725,7 +740,7 @@
       vx: Math.cos(aimAngle) * wp.projSpeed,
       vy: Math.sin(aimAngle) * wp.projSpeed,
       r: wp.projR,
-      dmg: p.damage * (wp.dmgMul || 1),
+      dmg: p.damage * (wp.dmgMul || 1) * dmgScale,
       life: 2.6,
       friendly: true,
       color: color,
@@ -743,6 +758,8 @@
     var crit = this.rng() < p.crit;
     var mul = p.dmgBuffT > 0 ? p.dmgBuffMul : 1;
     if (this.hasUnique('berserk') && p.hp / p.maxHp < 0.40) mul *= 1.4;
+    // 传说武器：猎杀 — 残血增伤
+    if (this.hasUnique('execute') && e.maxHp > 0 && e.hp / e.maxHp < 0.30) mul *= 1.75;
     mul *= (wp.dmgMul || 1) * (opts.dmgScale || 1);
     var dmg = p.damage * mul * (crit ? p.critMult : 1);
     var dealt = this.damageEnemy(e, dmg, {
@@ -752,6 +769,53 @@
       stun: opts.stun != null ? opts.stun : (e.boss ? 0 : 0.12)
     });
     this.applyLifesteal(dealt);
+    if (dealt > 0 && !opts.noProc) this.procWeaponUniques(e, ang, opts);
+  };
+
+  /** 传说武器命中触发：裂空溅射 / 星链 */
+  World.prototype.procWeaponUniques = function (e, ang, opts) {
+    opts = opts || {};
+    var p = this.player;
+    var wp = p.weapon || SP.Items.weaponProfile(null);
+    var i, t, d;
+
+    if (this.hasUnique('rift')) {
+      var riftR = 95;
+      this.ring(e.x, e.y, 6, riftR, 0.22, '#c9a0ff', 3);
+      for (i = 0; i < this.enemies.length; i++) {
+        t = this.enemies[i];
+        if (t === e || t.dying > 0) continue;
+        d = SP.dist(e.x, e.y, t.x, t.y);
+        if (d > riftR + t.r) continue;
+        this.hitEnemyWithAttack(t, Math.atan2(t.y - e.y, t.x - e.x), {
+          dmgScale: 0.40 * (opts.dmgScale || 1),
+          knock: (wp.knock || 130) * 0.45,
+          stun: 0,
+          noProc: true
+        });
+      }
+    }
+
+    if (this.hasUnique('starchain') && this.rng() < 0.35) {
+      var best = null, bestD = 190;
+      for (i = 0; i < this.enemies.length; i++) {
+        t = this.enemies[i];
+        if (t === e || t.dying > 0) continue;
+        d = SP.dist(e.x, e.y, t.x, t.y);
+        if (d < bestD + t.r) { best = t; bestD = d; }
+      }
+      if (best) {
+        this.burst(e.x, e.y, 5, '#a8f0ff', 80, 0.2, 2);
+        this.burst(best.x, best.y, 6, '#a8f0ff', 100, 0.25, 2.4);
+        this.hitEnemyWithAttack(best, Math.atan2(best.y - e.y, best.x - e.x), {
+          dmgScale: 0.70 * (opts.dmgScale || 1),
+          knock: (wp.knock || 130) * 0.55,
+          stun: best.boss ? 0 : 0.08,
+          noProc: true,
+          melee: false
+        });
+      }
+    }
   };
 
   World.prototype.applyLifesteal = function (dealt) {
@@ -764,7 +828,7 @@
   World.prototype.castQuake = function () {
     var p = this.player;
     if (p.quakeCd > 0 || this.dead) return false;
-    p.quakeCd = 8 * (1 - p.cdr);
+    p.quakeCd = 8 * (1 - p.cdr) * (this.hasUnique('overcharge') ? 0.75 : 1);
     var R = 195;
     this.ring(p.x, p.y, 16, R, 0.45, '#7fe3ff', 7);
     this.ring(p.x, p.y, 8, R * 0.7, 0.32, '#ffffff', 3);
@@ -1101,6 +1165,7 @@
           var crit = this.rng() < p.crit;
           var mul = p.dmgBuffT > 0 ? p.dmgBuffMul : 1;
           if (this.hasUnique('berserk') && p.hp / p.maxHp < 0.40) mul *= 1.4;
+          if (this.hasUnique('execute') && e.maxHp > 0 && e.hp / e.maxHp < 0.30) mul *= 1.75;
           var dmg = pr.dmg * mul * (crit ? p.critMult : 1);
           // 法杖弹道吃技能伤害加成
           if (pr.style === 'bolt') dmg *= (1 + p.skillDmg);
@@ -1108,6 +1173,7 @@
             crit: crit, knock: pr.knock || 70, knockAngle: ang, stun: e.boss ? 0 : 0.08
           });
           this.applyLifesteal(dealt);
+          if (dealt > 0) this.procWeaponUniques(e, ang, { dmgScale: 1 });
           this.burst(pr.x, pr.y, 7, pr.color, 120, 0.3, 2.8);
           pr.pierce = (pr.pierce || 1) - 1;
           if (pr.pierce <= 0) { hit = true; break; }
@@ -1196,7 +1262,7 @@
   World.prototype.cooldowns = function () {
     var p = this.player;
     return {
-      quake: { left: p.quakeCd, total: 8 * (1 - p.cdr) },
+      quake: { left: p.quakeCd, total: 8 * (1 - p.cdr) * (this.hasUnique('overcharge') ? 0.75 : 1) },
       bless: { left: p.blessCd, total: 18 * (1 - p.cdr) },
       dash: { left: p.dashCd, total: 3 * (1 - p.cdr) * (this.hasUnique('swift') ? 0.5 : 1) },
       steak: { left: p.useCd, total: 6 }
