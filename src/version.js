@@ -3,13 +3,22 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.10.0';
+  SP.VERSION = '2.10.1';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.10.1',
+      date: '2026-10-09',
+      title: '装备技能按钮移至右下角',
+      items: [
+        '装备带来的主动技能（如「开·小领域」）固定显示在战斗 HUD 右下角，与底部通用技能条分离',
+        '后续新增装备 / 套装主动技能统一放入右下角区域'
+      ]
+    },
     {
       version: '2.10.0',
       date: '2026-10-09',
