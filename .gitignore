@@ -1,3 +1,6 @@
 # 服主自动部署生成的本机信息（含 IP，勿提交）
 .host-info.json
 host-card.txt
+
+# 本地导出
+dist/*.zip
