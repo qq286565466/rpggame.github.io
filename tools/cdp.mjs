@@ -13,7 +13,11 @@ import path from 'node:path';
 const CHROME_CANDIDATES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-  'C:/Program Files/Microsoft/Edge/Application/msedge.exe'
+  'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+  '/usr/local/bin/google-chrome',
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/google-chrome',
+  '/usr/local/bin/chrome'
 ];
 
 const [url, outArg, waitArg, wArg, hArg, expr, preExpr] = process.argv.slice(2);
@@ -47,6 +51,8 @@ fs.mkdirSync(path.dirname(out), { recursive: true });
 
 const child = spawn(exe, [
   '--headless=new',
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
   '--disable-gpu',
   '--mute-audio',
   '--no-first-run',
