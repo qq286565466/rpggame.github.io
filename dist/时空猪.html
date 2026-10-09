@@ -1027,7 +1027,8 @@
           <button class="ghost tiny-btn" data-close="panelOnline">关闭 (Esc)</button>
         </div>
         <p class="tiny muted" style="margin:0 0 10px">
-          先运行 <code>npm run online</code>，再点下方接入。大厅里能看见其他旅人；可组队进本，也可各自单刷。
+          先启动联机服务端：<code>npm run online</code>（即 <code>node server</code>），再点下方接入。
+          大厅里能看见其他旅人；可组队进本，也可各自单刷。公网部署见 <code>server/README.md</code>。
         </p>
         <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <input id="onlineUrl" type="text" placeholder="ws://127.0.0.1:4321/ws" style="flex:1;min-width:180px">
@@ -1400,13 +1401,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.11.0';
+  SP.VERSION = '2.11.1';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.11.1',
+      date: '2026-10-09',
+      title: '独立联机服务端',
+      items: [
+        '联机逻辑拆为 server/ 服务端：HTTP 静态站 + WebSocket 大厅 + /api/status·rooms',
+        '服务端心跳与超时清理；客户端应用层 ping/pong 与断线自动重连',
+        'npm run online / npm run server 启动；公网部署说明见 server/README.md'
+      ]
+    },
     {
       version: '2.11.0',
       date: '2026-10-09',
@@ -5173,6 +5184,14 @@
     this.handlers = {};
     this._posAcc = 0;
     this.pendingInvite = null;
+    this._profile = null;
+    this._wantConnect = false;
+    this._heartbeat = null;
+    this._reconnectTimer = null;
+    this._reconnectAttempt = 0;
+    this.autoReconnect = opts.autoReconnect !== false;
+    this.rttMs = null;
+    this.serverInfo = null;
   }
 
   OnlineClient.prototype.on = function (type, fn) {
@@ -5189,26 +5208,34 @@
 
   OnlineClient.prototype.connect = function (profile) {
     var self = this;
-    profile = profile || {};
+    profile = profile || this._profile || {};
+    this._profile = profile;
+    this._wantConnect = true;
+    this._clearReconnect();
     if (this.ws && (this.ws.readyState === 0 || this.ws.readyState === 1)) {
+      this._manualClose = true;
       this.disconnect();
     }
+    this._manualClose = false;
     var url = this.url;
     var ws;
     try { ws = new WebSocket(url); }
     catch (e) {
       this.emit('error', { reason: '无法创建连接：' + (e && e.message) });
+      this._scheduleReconnect();
       return;
     }
     this.ws = ws;
     ws.onopen = function () {
       self.connected = true;
+      self._reconnectAttempt = 0;
       self.send({
         t: 'hello',
         name: profile.name || '旅人',
         level: profile.level || 1,
         x: profile.x, y: profile.y, facing: profile.facing
       });
+      self._startHeartbeat();
       self.emit('open', {});
     };
     ws.onmessage = function (ev) {
@@ -5221,14 +5248,58 @@
       self.id = null;
       self.peers = {};
       self.party = null;
+      self._stopHeartbeat();
       self.emit('close', {});
+      if (self._wantConnect && !self._manualClose && self.autoReconnect) {
+        self._scheduleReconnect();
+      }
     };
     ws.onerror = function () {
-      self.emit('error', { reason: '联机连接失败（请确认已运行 npm run online）' });
+      self.emit('error', { reason: '联机连接失败（请确认已运行 npm run online / node server）' });
     };
   };
 
+  OnlineClient.prototype._startHeartbeat = function () {
+    var self = this;
+    this._stopHeartbeat();
+    this._heartbeat = setInterval(function () {
+      if (!self.connected) return;
+      self.send({ t: 'ping', ts: Date.now() });
+    }, 10000);
+  };
+
+  OnlineClient.prototype._stopHeartbeat = function () {
+    if (this._heartbeat) {
+      clearInterval(this._heartbeat);
+      this._heartbeat = null;
+    }
+  };
+
+  OnlineClient.prototype._clearReconnect = function () {
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+  };
+
+  OnlineClient.prototype._scheduleReconnect = function () {
+    var self = this;
+    if (!this.autoReconnect || !this._wantConnect) return;
+    this._clearReconnect();
+    var attempt = this._reconnectAttempt++;
+    var delay = Math.min(15000, 800 * Math.pow(1.6, attempt));
+    this.emit('reconnecting', { attempt: attempt + 1, delay: delay });
+    this._reconnectTimer = setTimeout(function () {
+      self._reconnectTimer = null;
+      if (self._wantConnect) self.connect(self._profile);
+    }, delay);
+  };
+
   OnlineClient.prototype.disconnect = function () {
+    this._wantConnect = false;
+    this._manualClose = true;
+    this._clearReconnect();
+    this._stopHeartbeat();
     if (this.ws) {
       try { this.ws.close(); } catch (e) { /* ignore */ }
     }
@@ -5244,8 +5315,14 @@
 
   OnlineClient.prototype._handle = function (msg) {
     if (!msg || !msg.t) return;
+    if (msg.t === 'pong') {
+      if (msg.ts) this.rttMs = Math.max(0, Date.now() - msg.ts);
+      this.emit('pong', msg);
+      return;
+    }
     if (msg.t === 'welcome') {
       this.id = msg.id;
+      this.serverInfo = msg.server || null;
       this.peers = {};
       (msg.peers || []).forEach(function (p) { this.peers[p.id] = p; }, this);
       this.emit('welcome', msg);
@@ -10248,13 +10325,23 @@
   function wireOnline(client) {
     online = client;
     online.on('welcome', function () {
-      ui.setOnlineStatus('已接入 · ' + (online.id || ''), true);
+      var rtt = online.rttMs != null ? (' · ' + online.rttMs + 'ms') : '';
+      ui.setOnlineStatus('已接入 · ' + (online.id || '') + rtt, true);
       pushCharSync();
       syncHideoutRemotes();
       refreshOnlineUi();
       ui.flash('已接入联机大厅', true);
     });
+    online.on('pong', function () {
+      if (!online || !online.connected) return;
+      var rtt = online.rttMs != null ? (' · ' + online.rttMs + 'ms') : '';
+      ui.setOnlineStatus('已接入 · ' + (online.id || '') + rtt, true);
+    });
+    online.on('reconnecting', function (info) {
+      ui.setOnlineStatus('重连中… (' + (info && info.attempt || '?') + ')', false);
+    });
     online.on('close', function () {
+      if (online && online._wantConnect) return; // 自动重连中
       ui.setOnlineStatus('离线', false);
       onlineRole = null;
       onlineHostId = null;
@@ -10264,7 +10351,7 @@
       refreshOnlineUi();
     });
     online.on('error', function (e) {
-      ui.setOnlineStatus('连接失败', false);
+      if (!(online && online._wantConnect)) ui.setOnlineStatus('连接失败', false);
       ui.flash((e && e.reason) || '联机失败');
     });
     online.on('peers', function () { syncHideoutRemotes(); refreshOnlineUi(); });
@@ -10322,10 +10409,15 @@
       ui.flash('请先登录');
       return;
     }
+    var wsUrl = (url && String(url).trim()) || SP.OnlineClient.defaultWsUrl();
+    if (online && online.url === wsUrl && online.connected) {
+      ui.flash('已在联机大厅', true);
+      return;
+    }
     if (online) {
       try { online.disconnect(); } catch (e) { /* ignore */ }
     }
-    var client = new SP.OnlineClient({ url: url || SP.OnlineClient.defaultWsUrl() });
+    var client = new SP.OnlineClient({ url: wsUrl, autoReconnect: true });
     wireOnline(client);
     ui.setOnlineStatus('连接中…', false);
     var h = ui.hideout;
