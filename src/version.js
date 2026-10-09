@@ -3,13 +3,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.11.1';
+  SP.VERSION = '2.11.2';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.11.2',
+      date: '2026-10-09',
+      title: '服主自动部署与端口映射提醒',
+      items: [
+        '新增 npm run deploy：自动探测局域网/公网 IP，启动联机服，并醒目提示需映射的 TCP 端口与内部 IP',
+        '生成 host-card.txt 与服主面板 /host，方便复制发给好友',
+        'HTTP 与 WebSocket 共用同一端口，只需映射一次'
+      ]
+    },
     {
       version: '2.11.1',
       date: '2026-10-09',
