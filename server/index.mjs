@@ -23,7 +23,7 @@ import { formatHostCard } from './hostinfo.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
-const VERSION = '2.11.2';
+const VERSION = '2.11.3';
 
 const port = Number(process.env.PORT || process.argv[2] || 4321);
 const host = process.env.HOST || '0.0.0.0';

@@ -135,6 +135,82 @@ await test('组队 World：多人 roster、配额放大、快照往返', () => {
   assert.equal(w2.player.id, 'guest');
 });
 
+await test('客机软快照：本地预测不被小误差拉回，敌人走插值', () => {
+  const ch = {
+    level: 10, xp: 0, coins: 0, stones: 0, steaks: 3,
+    equipped: { weapon: null, helm: null, armor: null, boots: null, amulet: null, ring1: null, ring2: null },
+    inventory: [], materials: { up: 0, re: 0 }
+  };
+  const w = new SP.World({
+    seed: 7, character: ch, localId: 'guest',
+    party: [
+      { id: 'host', name: '队长', character: ch },
+      { id: 'guest', name: '同伴', character: ch }
+    ],
+    dungeon: { biome: 'camp', floor: 1 }
+  });
+  const me = w.player;
+  me.x = 40; me.y = 0;
+  const ally = w.players[0];
+  ally.x = 0; ally.y = 0;
+  w.enemies = [{
+    key: 'calf', name: '犊', kind: 'melee', x: 100, y: 0, hp: 10, maxHp: 10,
+    r: 16, color: '#fff', boss: false, elite: false, dying: 0, spawnT: 0,
+    state: 'idle', stateT: 0, hitFlash: 0, stun: 0, anim: 0, slamR: 190,
+    chargeDir: 0, vx: 0, vy: 0, atkCd: 1, atkRange: 40, dmg: 1, speed: 0, xp: 0, coin: 0
+  }];
+
+  const snap = {
+    time: 1, kills: 0, killsNeeded: 17, coins: 0, stones: 0, steaks: 3,
+    bossSpawned: false, cleared: false, dead: false,
+    players: [
+      { id: 'host', x: 30, y: 0, vx: 0, vy: 0, facing: 0, hp: 100, maxHp: 100, walkPhase: 1, swingT: 0, swingDir: 0, hurtFlash: 0, shield: 0, domainT: 0, domainR: 0, curseMarks: 0 },
+      { id: 'guest', x: 48, y: 0, vx: 0, vy: 0, facing: 0, hp: 100, maxHp: 100, walkPhase: 1, swingT: 0, swingDir: 0, hurtFlash: 0, shield: 0, domainT: 0, domainR: 0, curseMarks: 0 }
+    ],
+    enemies: [{
+      key: 'calf', x: 140, y: 0, vx: 20, vy: 0, hp: 10, maxHp: 10, r: 16, color: '#fff',
+      boss: false, elite: false, dying: 0, spawnT: 0, state: 'idle', stateT: 0,
+      hitFlash: 0, stun: 0, anim: 0, slamR: 190, chargeDir: 0
+    }],
+    pickups: []
+  };
+  w.applySnapshot(snap, { softLocal: true });
+  // 本地误差 < 22：保持预测位置
+  assert.equal(me.x, 40);
+  assert.equal(me.tx, null);
+  // 同伴与敌人进入插值目标
+  assert.equal(ally.tx, 30);
+  assert.equal(w.enemies[0].tx, 140);
+  const ex0 = w.enemies[0].x;
+  for (let i = 0; i < 20; i++) w.tickNetInterp(1 / 60);
+  assert.ok(w.enemies[0].x > ex0, '敌人应向目标插值');
+  assert.ok(ally.x > 0, '同伴应向目标插值');
+
+  // 本地大幅偏离应硬纠正
+  me.x = -200;
+  w.applySnapshot(snap, { softLocal: true });
+  assert.ok(Math.abs(me.x - 48) < 0.1, '大误差应硬纠正到权威位置');
+});
+
+await test('客机 predictLocalMove 响应方向键', () => {
+  const ch = {
+    level: 5, xp: 0, coins: 0, stones: 0, steaks: 3,
+    equipped: { weapon: null, helm: null, armor: null, boots: null, amulet: null, ring1: null, ring2: null },
+    inventory: [], materials: { up: 0, re: 0 }
+  };
+  const w = new SP.World({
+    seed: 9, character: ch, localId: 'guest',
+    party: [
+      { id: 'host', name: '队长', character: ch },
+      { id: 'guest', name: '同伴', character: ch }
+    ],
+    dungeon: { biome: 'camp', floor: 1 }
+  });
+  const x0 = w.player.x;
+  for (let i = 0; i < 30; i++) w.predictLocalMove(1 / 60, { mx: 1, my: 0 });
+  assert.ok(w.player.x > x0 + 20, '本地预测应向右移动');
+});
+
 const PORT = 18765 + Math.floor(Math.random() * 200);
 let serverProc = null;
 

@@ -1401,13 +1401,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.11.2';
+  SP.VERSION = '2.11.3';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.11.3',
+      date: '2026-10-09',
+      title: '组队客机流畅度',
+      items: [
+        '组队副本客机改为本地移动预测 + 快照软纠正，不再每帧硬瞬移',
+        '敌人/同伴位置插值与短时外推；快照数值压缩，房主发送更密',
+        '客机一次性技能按键合并发送，减少丢键'
+      ]
+    },
     {
       version: '2.11.2',
       date: '2026-10-09',
@@ -4051,49 +4061,70 @@
     };
   }
 
-  /** 房主权威：压缩快照供同伴渲染 */
+  function r1(n) { return Math.round(n * 10) / 10; }
+  function r2(n) { return Math.round(n * 100) / 100; }
+
+  /** 房主权威：压缩快照供同伴渲染（数值取整，减小带宽） */
   World.prototype.snapshot = function () {
     var players = [];
     for (var i = 0; i < this.players.length; i++) {
       var p = this.players[i];
       players.push({
-        id: p.id, name: p.name, x: p.x, y: p.y, vx: p.vx, vy: p.vy,
-        facing: p.facing, hp: p.hp, maxHp: p.maxHp, walkPhase: p.walkPhase,
-        swingT: p.swingT, swingDir: p.swingDir, hurtFlash: p.hurtFlash,
-        shield: p.shield, domainT: p.domainT, domainR: p.domainR,
-        curseMarks: p.curseMarks, level: p.level
+        id: p.id, name: p.name,
+        x: r1(p.x), y: r1(p.y), vx: r1(p.vx), vy: r1(p.vy),
+        facing: r2(p.facing), hp: r1(p.hp), maxHp: r1(p.maxHp),
+        walkPhase: r2(p.walkPhase),
+        swingT: r2(p.swingT), swingDir: r2(p.swingDir), hurtFlash: r2(p.hurtFlash),
+        shield: r1(p.shield), domainT: r2(p.domainT), domainR: r1(p.domainR),
+        curseMarks: p.curseMarks || 0, level: p.level
       });
     }
     var enemies = [];
     for (var e = 0; e < this.enemies.length; e++) {
       var en = this.enemies[e];
       enemies.push({
-        key: en.key, x: en.x, y: en.y, hp: en.hp, maxHp: en.maxHp,
-        r: en.r, color: en.color, boss: en.boss, elite: en.elite,
-        dying: en.dying, spawnT: en.spawnT, state: en.state, stateT: en.stateT,
-        hitFlash: en.hitFlash, stun: en.stun, anim: en.anim,
-        slamR: en.slamR, chargeDir: en.chargeDir
+        key: en.key, x: r1(en.x), y: r1(en.y),
+        vx: r1(en.vx || 0), vy: r1(en.vy || 0),
+        hp: r1(en.hp), maxHp: r1(en.maxHp),
+        r: en.r, color: en.color, boss: !!en.boss, elite: !!en.elite,
+        dying: r2(en.dying || 0), spawnT: r2(en.spawnT || 0),
+        state: en.state, stateT: r2(en.stateT || 0),
+        hitFlash: r2(en.hitFlash || 0), stun: r2(en.stun || 0),
+        anim: r2(en.anim || 0), slamR: en.slamR, chargeDir: r2(en.chargeDir || 0)
       });
     }
     var pickups = [];
     for (var k = 0; k < this.pickups.length; k++) {
       var pk = this.pickups[k];
+      var slimItem = null;
+      if (pk.item) {
+        slimItem = {
+          rarity: pk.item.rarity, base: pk.item.base,
+          name: pk.item.name, slot: pk.item.slot
+        };
+      }
       pickups.push({
-        x: pk.x, y: pk.y, kind: pk.kind, r: pk.r, bob: pk.bob, life: pk.life,
-        value: pk.value, item: pk.item || null
+        x: r1(pk.x), y: r1(pk.y), kind: pk.kind, r: pk.r,
+        bob: r2(pk.bob || 0), life: r1(pk.life == null ? 30 : pk.life),
+        value: pk.value, item: slimItem
       });
     }
     return {
-      time: this.time, kills: this.kills, killsNeeded: this.killsNeeded,
+      time: r2(this.time), kills: this.kills, killsNeeded: this.killsNeeded,
       coins: this.coins, stones: this.stones, steaks: this.steaks,
       bossSpawned: this.bossSpawned, cleared: this.cleared, dead: this.dead,
-      players: players, enemies: enemies, pickups: pickups,
-      camera: { x: this.camera.x, y: this.camera.y }
+      players: players, enemies: enemies, pickups: pickups
     };
   };
 
-  World.prototype.applySnapshot = function (snap) {
+  /**
+   * 应用房主快照。
+   * opts.softLocal：客机模式——本地角色软纠正 + 他人/敌人插值目标，避免硬瞬移卡顿。
+   */
+  World.prototype.applySnapshot = function (snap, opts) {
     if (!snap) return;
+    opts = opts || {};
+    var softLocal = !!opts.softLocal;
     this.time = snap.time;
     this.kills = snap.kills;
     this.killsNeeded = snap.killsNeeded;
@@ -4103,33 +4134,73 @@
     this.bossSpawned = snap.bossSpawned;
     this.cleared = snap.cleared;
     this.dead = snap.dead;
-    // 不覆盖相机：客机跟随本地角色，房主自己算
+
     var byId = {};
     for (var i = 0; i < this.players.length; i++) byId[this.players[i].id] = this.players[i];
+    var localId = this.localId;
     (snap.players || []).forEach(function (sp) {
       var p = byId[sp.id];
       if (!p) return;
-      p.x = sp.x; p.y = sp.y; p.vx = sp.vx; p.vy = sp.vy;
-      p.facing = sp.facing; p.hp = sp.hp; p.maxHp = sp.maxHp;
-      p.walkPhase = sp.walkPhase; p.swingT = sp.swingT; p.swingDir = sp.swingDir;
-      p.hurtFlash = sp.hurtFlash; p.shield = sp.shield;
-      p.domainT = sp.domainT; p.domainR = sp.domainR;
-      p.curseMarks = sp.curseMarks;
+      p.hp = sp.hp; p.maxHp = sp.maxHp;
+      p.swingT = sp.swingT; p.swingDir = sp.swingDir; p.hurtFlash = sp.hurtFlash;
+      p.shield = sp.shield; p.domainT = sp.domainT; p.domainR = sp.domainR;
+      p.curseMarks = sp.curseMarks; p.vx = sp.vx; p.vy = sp.vy;
+      if (softLocal && sp.id === localId) {
+        var err = dist(p.x, p.y, sp.x, sp.y);
+        if (err > 110) {
+          p.x = sp.x; p.y = sp.y; p.tx = null; p.ty = null;
+        } else if (err > 22) {
+          p.tx = sp.x; p.ty = sp.y;
+        } else {
+          p.tx = null; p.ty = null;
+        }
+        // 面向与步伐以权威为准做轻柔对齐，避免打架
+        if (sp.facing != null) p.facing = sp.facing;
+        if (sp.walkPhase != null && err > 22) p.walkPhase = sp.walkPhase;
+      } else if (softLocal) {
+        p.tx = sp.x; p.ty = sp.y;
+        p.netVx = sp.vx || 0; p.netVy = sp.vy || 0;
+        p.facing = sp.facing; p.walkPhase = sp.walkPhase;
+      } else {
+        p.x = sp.x; p.y = sp.y; p.facing = sp.facing; p.walkPhase = sp.walkPhase;
+        p.tx = null; p.ty = null;
+      }
     });
-    this.enemies = (snap.enemies || []).map(function (en) {
-      return {
-        key: en.key, name: (ENEMY_TYPES[en.key] && ENEMY_TYPES[en.key].name) || en.key,
+
+    var prev = this.enemies || [];
+    var next = [];
+    var list = snap.enemies || [];
+    for (var e = 0; e < list.length; e++) {
+      var en = list[e];
+      var old = prev[e] && prev[e].key === en.key ? prev[e] : null;
+      var ent = old || {
+        key: en.key,
+        name: (ENEMY_TYPES[en.key] && ENEMY_TYPES[en.key].name) || en.key,
         kind: (ENEMY_TYPES[en.key] && ENEMY_TYPES[en.key].kind) || 'melee',
-        x: en.x, y: en.y, hp: en.hp, maxHp: en.maxHp, r: en.r, color: en.color,
-        boss: en.boss, elite: en.elite, dying: en.dying || 0, spawnT: en.spawnT || 0,
-        state: en.state || 'idle', stateT: en.stateT || 0, hitFlash: en.hitFlash || 0,
-        stun: en.stun || 0, anim: en.anim || 0, slamR: en.slamR || 190,
-        chargeDir: en.chargeDir || 0, vx: 0, vy: 0, atkCd: 1, atkRange: 40,
-        dmg: 1, speed: 0, xp: 0, coin: 0
+        atkCd: 1, atkRange: 40, dmg: 1, speed: 0, xp: 0, coin: 0
       };
-    });
+      ent.key = en.key;
+      ent.hp = en.hp; ent.maxHp = en.maxHp; ent.r = en.r; ent.color = en.color;
+      ent.boss = en.boss; ent.elite = en.elite;
+      ent.dying = en.dying || 0; ent.spawnT = en.spawnT || 0;
+      ent.state = en.state || 'idle'; ent.stateT = en.stateT || 0;
+      ent.hitFlash = en.hitFlash || 0; ent.stun = en.stun || 0;
+      ent.anim = en.anim || 0; ent.slamR = en.slamR || 190;
+      ent.chargeDir = en.chargeDir || 0;
+      ent.netVx = en.vx || 0; ent.netVy = en.vy || 0;
+      if (softLocal && old) {
+        ent.tx = en.x; ent.ty = en.y;
+        if (dist(ent.x, ent.y, en.x, en.y) > 160) { ent.x = en.x; ent.y = en.y; }
+      } else {
+        ent.x = en.x; ent.y = en.y; ent.tx = null; ent.ty = null;
+      }
+      ent.vx = en.vx || 0; ent.vy = en.vy || 0;
+      next.push(ent);
+    }
+    this.enemies = next;
     this.boss = null;
     for (var b = 0; b < this.enemies.length; b++) if (this.enemies[b].boss) this.boss = this.enemies[b];
+
     this.pickups = (snap.pickups || []).map(function (pk) {
       return {
         x: pk.x, y: pk.y, kind: pk.kind, r: pk.r || 12, bob: pk.bob || 0,
@@ -4138,6 +4209,90 @@
       };
     });
     this.focusLocal();
+  };
+
+  /** 客机：插值靠近快照目标，并做短时外推 */
+  World.prototype.tickNetInterp = function (dt) {
+    var k = Math.min(1, dt * 14);
+    var i, p, e;
+    for (i = 0; i < this.players.length; i++) {
+      p = this.players[i];
+      if (p.tx == null) continue;
+      p.x = SP.lerp(p.x, p.tx, k);
+      p.y = SP.lerp(p.y, p.ty, k);
+      if (dist(p.x, p.y, p.tx, p.ty) < 1.5) { p.tx = null; p.ty = null; }
+    }
+    for (i = 0; i < this.enemies.length; i++) {
+      e = this.enemies[i];
+      if (e.tx == null) {
+        // 无新目标时短时外推，避免怪「一顿一顿」
+        if (e.netVx || e.netVy) {
+          e.x += (e.netVx || 0) * dt;
+          e.y += (e.netVy || 0) * dt;
+        }
+        continue;
+      }
+      e.x = SP.lerp(e.x, e.tx, k);
+      e.y = SP.lerp(e.y, e.ty, k);
+      if (dist(e.x, e.y, e.tx, e.ty) < 1.5) { e.tx = null; e.ty = null; }
+    }
+  };
+
+  /**
+   * 客机本地预测：只模拟自己的移动/冲刺/朝向，不结算伤害。
+   * 攻击与技能由房主权威，经快照回传。
+   */
+  World.prototype.predictLocalMove = function (dt, input) {
+    var p = this.focusLocal();
+    if (!p || p.hp <= 0) return;
+    input = input || {};
+    p.swingT = Math.max(0, p.swingT - dt);
+    p.hurtFlash = Math.max(0, p.hurtFlash - dt);
+    p.invuln = Math.max(0, (p.invuln || 0) - dt);
+    p.dashCd = Math.max(0, (p.dashCd || 0) - dt);
+
+    var mx = input.mx || 0, my = input.my || 0;
+    var ml = SP.len(mx, my);
+    if (ml > 1) { mx /= ml; my /= ml; ml = 1; }
+
+    var aim = input.aimAngle;
+    if (p.dashT > 0) {
+      p.dashT -= dt;
+      var dsp = 1180;
+      p.vx = Math.cos(p.dashDir) * dsp;
+      p.vy = Math.sin(p.dashDir) * dsp;
+    } else {
+      var spd = p.speed * (p.speedBuffT > 0 ? 1.3 : 1) * (p.domainMoveMul || 1) * (p.swingT > 0 ? 0.74 : 1);
+      p.vx = SP.lerp(p.vx, mx * spd, Math.min(1, dt * 16));
+      p.vy = SP.lerp(p.vy, my * spd, Math.min(1, dt * 16));
+      if (input.dash && p.dashCd <= 0 && (ml > 0.05 || aim !== undefined)) {
+        p.dashDir = ml > 0.05 ? Math.atan2(my, mx) : aim;
+        p.dashT = 0.16;
+        p.dashCd = 3 * (1 - (p.cdr || 0)) * ((p.uniques && p.uniques.indexOf('swift') >= 0) ? 0.5 : 1);
+        p.invuln = Math.max(p.invuln, 0.18);
+      }
+    }
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    if (ml > 0.05) p.walkPhase += dt * 11;
+    clampArena(this, p);
+    pushOutOfObstacles(this, p);
+    if (aim !== undefined && isFinite(aim)) {
+      p.facing = input.aimSnap ? aim : SP.turnToward(p.facing, aim, dt * 22);
+    } else if (ml > 0.05) {
+      p.facing = SP.turnToward(p.facing, Math.atan2(my, mx), dt * 14);
+    }
+
+    // 相机跟随本地预测
+    var cam = this.camera;
+    cam.x = SP.lerp(cam.x, p.x, Math.min(1, dt * 8));
+    cam.y = SP.lerp(cam.y, p.y, Math.min(1, dt * 8));
+    if (input.viewW && input.viewH) {
+      var limX = Math.max(0, this.arena - input.viewW / 2);
+      var limY = Math.max(0, this.arena - input.viewH / 2);
+      cam.x = clamp(cam.x, -limX, limX);
+      cam.y = clamp(cam.y, -limY, limY);
+    }
   };
 
   SP.BIOMES = BIOMES;
@@ -9883,6 +10038,7 @@
   var snapAcc = 0;
   var inputAcc = 0;
   var awaitingOnlineStart = false;
+  var guestPend = null;       // 客机合并的待发送输入（保住一次性按键）
 
   /* ------------------------------------------------------------------ 输入 */
   function keyName(ev) { return (ev.key || '').toLowerCase(); }
@@ -10391,12 +10547,7 @@
     });
     online.on('dungeon_snap', function (msg) {
       if (onlineRole !== 'guest' || !world || !msg || !msg.snap) return;
-      world.applySnapshot(msg.snap);
-      var focus = world.focusLocal();
-      if (focus) {
-        world.camera.x = SP.lerp(world.camera.x, focus.x, 0.45);
-        world.camera.y = SP.lerp(world.camera.y, focus.y, 0.45);
-      }
+      world.applySnapshot(msg.snap, { softLocal: true });
       if (world.cleared && !runBanked) finishRun(true);
       else if (world.dead && !runBanked) finishRun(false);
     });
@@ -10480,6 +10631,7 @@
     onlineHostId = msg.hostId;
     onlineRole = (msg.hostId === online.id) ? 'host' : 'guest';
     remoteInputs = {};
+    guestPend = null;
     snapAcc = 0;
     inputAcc = 0;
 
@@ -10621,6 +10773,41 @@
     };
   }
 
+  /** 合并客机输入：移动取最新，一次性技能按键做 OR，避免发送间隔丢键 */
+  function mergeGuestInput(dst, src) {
+    if (!dst) {
+      return {
+        mx: src.mx || 0, my: src.my || 0,
+        aimAngle: src.aimAngle, aimSnap: !!src.aimSnap,
+        attack: !!src.attack, quake: !!src.quake, bless: !!src.bless,
+        use: !!src.use, dash: !!src.dash, weaponSkill: !!src.weaponSkill,
+        viewW: src.viewW || 0, viewH: src.viewH || 0
+      };
+    }
+    dst.mx = src.mx || 0; dst.my = src.my || 0;
+    if (src.aimAngle !== undefined) dst.aimAngle = src.aimAngle;
+    dst.aimSnap = !!(dst.aimSnap || src.aimSnap);
+    dst.attack = !!(dst.attack || src.attack);
+    dst.quake = !!(dst.quake || src.quake);
+    dst.bless = !!(dst.bless || src.bless);
+    dst.use = !!(dst.use || src.use);
+    dst.dash = !!(dst.dash || src.dash);
+    dst.weaponSkill = !!(dst.weaponSkill || src.weaponSkill);
+    dst.viewW = src.viewW || dst.viewW; dst.viewH = src.viewH || dst.viewH;
+    return dst;
+  }
+
+  /** 房主消费同伴一次性按键后清掉，避免每帧重复释放 */
+  function consumeRemoteOneShots() {
+    Object.keys(remoteInputs).forEach(function (id) {
+      var inp = remoteInputs[id];
+      if (!inp) return;
+      inp.quake = false; inp.bless = false; inp.use = false;
+      inp.dash = false; inp.weaponSkill = false;
+      // attack 可按住，保留到下次更新
+    });
+  }
+
   function loop(now) {
     global.requestAnimationFrame(loop);
     if (!renderer) return;
@@ -10650,11 +10837,16 @@
     if (running && !world.dead && !world.cleared && !blocked) {
       var localInp = demo ? demoInput() : readInput();
       if (onlineRole === 'guest') {
+        guestPend = mergeGuestInput(guestPend, localInp);
         inputAcc += dt;
-        if (inputAcc >= 0.05) {
+        if (inputAcc >= 0.033) {
           inputAcc = 0;
-          online.sendDungeonInput(packNetInput(localInp));
+          online.sendDungeonInput(packNetInput(guestPend || localInp));
+          guestPend = null;
         }
+        // 本地预测移动 + 插值他人/敌人，消除「一顿一顿」
+        world.predictLocalMove(dt, localInp);
+        world.tickNetInterp(dt);
         world.updateVisuals(dt);
       } else if (onlineRole === 'host' && world.players.length > 1) {
         var multi = { __multi: true };
@@ -10663,9 +10855,10 @@
           multi[id] = remoteInputs[id] || {};
         });
         world.update(dt, multi);
+        consumeRemoteOneShots();
         consumeEvents();
         snapAcc += dt;
-        if (snapAcc >= 0.1) {
+        if (snapAcc >= 0.05) {
           snapAcc = 0;
           online.sendDungeonSnap(world.snapshot());
         }
@@ -10674,7 +10867,7 @@
         consumeEvents();
         if (onlineRole === 'host') {
           snapAcc += dt;
-          if (snapAcc >= 0.15) {
+          if (snapAcc >= 0.1) {
             snapAcc = 0;
             online.sendDungeonSnap(world.snapshot());
           }

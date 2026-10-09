@@ -120,7 +120,7 @@ export function createLobby(opts = {}) {
       peer.ws.send({
         t: 'welcome',
         id: peer.id,
-        server: { version: opts.version || '2.11.2', maxParty, maxPeers },
+        server: { version: opts.version || '2.11.3', maxParty, maxPeers },
         peers: [...peers.values()].filter((p) => p.id !== peer.id).map(publicPeer)
       });
       broadcast({ t: 'peer_join', peer: publicPeer(peer) }, peer.id);
@@ -308,7 +308,7 @@ export function createLobby(opts = {}) {
     return {
       ok: true,
       name: '时空猪联机服务',
-      version: opts.version || '2.11.2',
+      version: opts.version || '2.11.3',
       uptimeSec: Math.round((Date.now() - startedAt) / 1000),
       online: peers.size,
       maxPeers,
