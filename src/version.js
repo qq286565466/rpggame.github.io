@@ -3,13 +3,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.8.1';
+  SP.VERSION = '2.8.2';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.8.2',
+      date: '2026-10-09',
+      title: '修复角色立绘过小',
+      items: [
+        '裁切并放大主角 / 铁匠 / 商人立绘，铺满图标画布',
+        '场上体型与脚下影子对齐，避免「悬浮芝麻粒」',
+        '名牌位置随立绘高度调整'
+      ]
+    },
     {
       version: '2.8.1',
       date: '2026-10-09',

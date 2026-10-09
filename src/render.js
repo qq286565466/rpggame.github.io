@@ -554,10 +554,12 @@
     var breath = Math.sin(this.t * 2.15);
     var shadowScale = 1 + breath * 0.08 * idleEnergy;
 
-    // 影子（随呼吸略微缩放）
+    // 与 NPC 立绘同量级：按碰撞半径放大，避免再缩成「芝麻粒」
+    var heroSz = Math.round(Math.max(72, (p.r || 17) * 4.0));
+    // 影子贴在立绘脚下（内容底约在 +0.45·sz）
     ctx.globalAlpha = 0.4;
     ctx.fillStyle = '#000';
-    ellipse(ctx, sp.x + 3, sp.y + 15, 20 * shadowScale, 9 * (2 - shadowScale)); ctx.fill();
+    ellipse(ctx, sp.x + 2, sp.y + heroSz * 0.42, heroSz * 0.34 * shadowScale, heroSz * 0.13 * (2 - shadowScale)); ctx.fill();
     ctx.globalAlpha = 1;
 
     if (dead) {
@@ -565,7 +567,7 @@
       ctx.translate(sp.x, sp.y);
       ctx.rotate(Math.PI / 2 * 0.9);
       ctx.globalAlpha = 0.75;
-      if (!this.drawCharIcon(ctx, 'hero', 0, 0, 44)) this.drawPigBody(ctx, p, world, 0);
+      if (!this.drawCharIcon(ctx, 'hero', 0, 0, heroSz * 0.92)) this.drawPigBody(ctx, p, world, 0);
       ctx.restore();
       ctx.globalAlpha = 1;
       return;
@@ -602,14 +604,16 @@
       ctx.beginPath(); ctx.arc(0, 0, 26, 0, TAU); ctx.stroke();
       ctx.globalAlpha = 1;
     }
-    ctx.rotate(p.facing + Math.PI / 2); // 贴图朝上，旋转到 facing
-    ctx.translate(0, walkBob - 2);
+    ctx.translate(0, walkBob);
     this.charIdlePose(ctx, this.t, 0.4, idleEnergy);
-    if (!this.drawCharIcon(ctx, 'hero', 0, 0, 46)) this.drawPigBody(ctx, p, world, 1);
-    else if (p.hurtFlash > 0) {
+    // 立绘保持正立，脚下才能对上影子；程序化小猪仍朝面向旋转
+    if (!this.drawCharIcon(ctx, 'hero', 0, 0, heroSz)) {
+      ctx.rotate(p.facing + Math.PI / 2);
+      this.drawPigBody(ctx, p, world, 1);
+    } else if (p.hurtFlash > 0) {
       ctx.globalAlpha = clamp(p.hurtFlash / 0.3, 0, 1) * 0.55;
       ctx.fillStyle = '#fff';
-      ellipse(ctx, 0, 0, 18, 16); ctx.fill();
+      ellipse(ctx, 0, 0, heroSz * 0.36, heroSz * 0.32); ctx.fill();
       ctx.globalAlpha = 1;
     }
     ctx.restore();
@@ -725,11 +729,11 @@
   Renderer.prototype.charIdlePose = function (ctx, t, phase, energy) {
     energy = energy == null ? 1 : energy;
     var breath = Math.sin(t * 2.15 + phase);
-    var bob = Math.sin(t * 2.15 + phase) * 1.55 * energy
-      + Math.sin(t * 4.3 + phase * 1.7) * 0.35 * energy;
-    var sway = Math.sin(t * 1.35 + phase * 0.6) * 0.045 * energy;
-    var sx = 1 + breath * 0.028 * energy;
-    var sy = 1 - breath * 0.038 * energy;
+    var bob = Math.sin(t * 2.15 + phase) * 1.1 * energy
+      + Math.sin(t * 4.3 + phase * 1.7) * 0.25 * energy;
+    var sway = Math.sin(t * 1.35 + phase * 0.6) * 0.035 * energy;
+    var sx = 1 + breath * 0.024 * energy;
+    var sy = 1 - breath * 0.032 * energy;
     ctx.translate(0, bob);
     ctx.rotate(sway);
     ctx.scale(sx, sy);
@@ -1102,16 +1106,18 @@
     var pMoving = SP.len(h.player.vx, h.player.vy) > 12;
     var pBreath = Math.sin(t * 2.15);
     var pShadow = 1 + pBreath * 0.08 * (pMoving ? 0.35 : 1);
+    var hubHeroSz = Math.round(Math.max(72, (h.player.r || 17) * 4.0));
     ctx.globalAlpha = 0.4;
     ctx.fillStyle = '#000';
-    ellipse(ctx, pl.x + 3, pl.y + 15, 20 * pShadow, 9 * (2 - pShadow)); ctx.fill();
+    ellipse(ctx, pl.x + 2, pl.y + hubHeroSz * 0.42, hubHeroSz * 0.34 * pShadow, hubHeroSz * 0.13 * (2 - pShadow)); ctx.fill();
     ctx.globalAlpha = 1;
     ctx.save();
     ctx.translate(pl.x, pl.y);
-    ctx.rotate(h.player.facing + Math.PI / 2);
-    ctx.translate(0, Math.sin(h.player.walkPhase || 0) * (pMoving ? 1.35 : 0) - 2);
+    ctx.translate(0, Math.sin(h.player.walkPhase || 0) * (pMoving ? 1.35 : 0));
     this.charIdlePose(ctx, t, 0.4, pMoving ? 0.35 : 1);
-    if (!this.drawCharIcon(ctx, 'hero', 0, 0, 46)) {
+    // 立绘正立贴地；回退程序化小猪时再朝面向旋转
+    if (!this.drawCharIcon(ctx, 'hero', 0, 0, hubHeroSz)) {
+      ctx.rotate(h.player.facing + Math.PI / 2);
       SP.Renderer.prototype.drawPigBody.call(this, ctx, {
         walkPhase: h.player.walkPhase, vx: h.player.vx, vy: h.player.vy, hurtFlash: 0
       }, null, 1);
@@ -1348,20 +1354,17 @@
       // 铁匠节奏略沉、商人略轻快；走近时更有精神
       var energy = (npc.key === 'blacksmith' ? 1.15 : 1)
         * (isNear ? 1.25 : 1);
-      var idle = {
-        breath: Math.sin(t * 2.15 + phase),
-        bob: Math.sin(t * 2.15 + phase) * 1.55 * energy
-          + Math.sin(t * 4.3 + phase * 1.7) * 0.35 * energy
-      };
-      var shadowScale = 1 + idle.breath * 0.08 * energy;
-      // 影子
+      var breath = Math.sin(t * 2.15 + phase);
+      var shadowScale = 1 + breath * 0.08 * energy;
+      // 立绘铺满画布后按碰撞半径放大，避免再出现「芝麻粒」
+      var spriteSz = Math.round(Math.max(72, r * 3.15));
+      // 影子贴在立绘脚下（内容底约在 +0.45·sz）
       ctx.globalAlpha = 0.35;
       ctx.fillStyle = '#000';
-      ellipse(ctx, 2, r * 0.72, r * 0.78 * shadowScale, r * 0.3 * (2 - shadowScale)); ctx.fill();
+      ellipse(ctx, 2, spriteSz * 0.42, spriteSz * 0.34 * shadowScale, spriteSz * 0.13 * (2 - shadowScale)); ctx.fill();
       ctx.globalAlpha = 1;
 
       ctx.save();
-      ctx.translate(0, -4);
       this.charIdlePose(ctx, t, phase, energy);
       // 铁匠待机时额外轻微点头（像敲打间隙）
       if (npc.key === 'blacksmith') {
@@ -1374,7 +1377,7 @@
       }
       var charKey = npc.key === 'blacksmith' ? 'blacksmith'
         : (npc.key === 'merchant' ? 'merchant' : null);
-      var drawn = charKey && this.drawCharIcon(ctx, charKey, 0, 0, Math.round(r * 2.6));
+      var drawn = charKey && this.drawCharIcon(ctx, charKey, 0, 0, spriteSz);
       if (!drawn) {
         // 回退：旧版斗篷剪影
         var bgr = ctx.createLinearGradient(-r * 0.7, -r * 0.4, r * 0.7, r * 1.1);
@@ -1401,9 +1404,11 @@
         ctx.globalAlpha = 0.35 + 0.2 * Math.sin(t * 5);
         ctx.strokeStyle = npc.color || '#ffe9a8';
         ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.ellipse(0, r * 0.75, r * 0.95, r * 0.32, 0, 0, TAU); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(0, spriteSz * 0.44, spriteSz * 0.40, spriteSz * 0.15, 0, 0, TAU); ctx.stroke();
         ctx.globalAlpha = 1;
       }
+      // 名牌高度跟立绘走
+      npc._labelY = -spriteSz * 0.55;
     }
 
     // 名牌
@@ -1412,7 +1417,7 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     var label = npc.name;
-    var ly = npc.isPortal ? -r * 3.3 : -r * 1.9;
+    var ly = npc.isPortal ? -r * 3.3 : (npc._labelY != null ? npc._labelY : -r * 1.9);
     ctx.lineWidth = 4;
     ctx.strokeStyle = 'rgba(0,0,0,0.8)';
     ctx.strokeText(label, 0, ly);
