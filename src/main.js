@@ -41,6 +41,7 @@
   var snapAcc = 0;
   var inputAcc = 0;
   var awaitingOnlineStart = false;
+  var guestPend = null;       // 客机合并的待发送输入（保住一次性按键）
 
   /* ------------------------------------------------------------------ 输入 */
   function keyName(ev) { return (ev.key || '').toLowerCase(); }
@@ -549,12 +550,7 @@
     });
     online.on('dungeon_snap', function (msg) {
       if (onlineRole !== 'guest' || !world || !msg || !msg.snap) return;
-      world.applySnapshot(msg.snap);
-      var focus = world.focusLocal();
-      if (focus) {
-        world.camera.x = SP.lerp(world.camera.x, focus.x, 0.45);
-        world.camera.y = SP.lerp(world.camera.y, focus.y, 0.45);
-      }
+      world.applySnapshot(msg.snap, { softLocal: true });
       if (world.cleared && !runBanked) finishRun(true);
       else if (world.dead && !runBanked) finishRun(false);
     });
@@ -638,6 +634,7 @@
     onlineHostId = msg.hostId;
     onlineRole = (msg.hostId === online.id) ? 'host' : 'guest';
     remoteInputs = {};
+    guestPend = null;
     snapAcc = 0;
     inputAcc = 0;
 
@@ -779,6 +776,41 @@
     };
   }
 
+  /** 合并客机输入：移动取最新，一次性技能按键做 OR，避免发送间隔丢键 */
+  function mergeGuestInput(dst, src) {
+    if (!dst) {
+      return {
+        mx: src.mx || 0, my: src.my || 0,
+        aimAngle: src.aimAngle, aimSnap: !!src.aimSnap,
+        attack: !!src.attack, quake: !!src.quake, bless: !!src.bless,
+        use: !!src.use, dash: !!src.dash, weaponSkill: !!src.weaponSkill,
+        viewW: src.viewW || 0, viewH: src.viewH || 0
+      };
+    }
+    dst.mx = src.mx || 0; dst.my = src.my || 0;
+    if (src.aimAngle !== undefined) dst.aimAngle = src.aimAngle;
+    dst.aimSnap = !!(dst.aimSnap || src.aimSnap);
+    dst.attack = !!(dst.attack || src.attack);
+    dst.quake = !!(dst.quake || src.quake);
+    dst.bless = !!(dst.bless || src.bless);
+    dst.use = !!(dst.use || src.use);
+    dst.dash = !!(dst.dash || src.dash);
+    dst.weaponSkill = !!(dst.weaponSkill || src.weaponSkill);
+    dst.viewW = src.viewW || dst.viewW; dst.viewH = src.viewH || dst.viewH;
+    return dst;
+  }
+
+  /** 房主消费同伴一次性按键后清掉，避免每帧重复释放 */
+  function consumeRemoteOneShots() {
+    Object.keys(remoteInputs).forEach(function (id) {
+      var inp = remoteInputs[id];
+      if (!inp) return;
+      inp.quake = false; inp.bless = false; inp.use = false;
+      inp.dash = false; inp.weaponSkill = false;
+      // attack 可按住，保留到下次更新
+    });
+  }
+
   function loop(now) {
     global.requestAnimationFrame(loop);
     if (!renderer) return;
@@ -808,11 +840,16 @@
     if (running && !world.dead && !world.cleared && !blocked) {
       var localInp = demo ? demoInput() : readInput();
       if (onlineRole === 'guest') {
+        guestPend = mergeGuestInput(guestPend, localInp);
         inputAcc += dt;
-        if (inputAcc >= 0.05) {
+        if (inputAcc >= 0.033) {
           inputAcc = 0;
-          online.sendDungeonInput(packNetInput(localInp));
+          online.sendDungeonInput(packNetInput(guestPend || localInp));
+          guestPend = null;
         }
+        // 本地预测移动 + 插值他人/敌人，消除「一顿一顿」
+        world.predictLocalMove(dt, localInp);
+        world.tickNetInterp(dt);
         world.updateVisuals(dt);
       } else if (onlineRole === 'host' && world.players.length > 1) {
         var multi = { __multi: true };
@@ -821,9 +858,10 @@
           multi[id] = remoteInputs[id] || {};
         });
         world.update(dt, multi);
+        consumeRemoteOneShots();
         consumeEvents();
         snapAcc += dt;
-        if (snapAcc >= 0.1) {
+        if (snapAcc >= 0.05) {
           snapAcc = 0;
           online.sendDungeonSnap(world.snapshot());
         }
@@ -832,7 +870,7 @@
         consumeEvents();
         if (onlineRole === 'host') {
           snapAcc += dt;
-          if (snapAcc >= 0.15) {
+          if (snapAcc >= 0.1) {
             snapAcc = 0;
             online.sendDungeonSnap(world.snapshot());
           }
