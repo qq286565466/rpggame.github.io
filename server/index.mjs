@@ -23,7 +23,7 @@ import { formatHostCard } from './hostinfo.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
-const VERSION = '2.11.4';
+const VERSION = '2.11.5';
 
 const port = Number(process.env.PORT || process.argv[2] || 4321);
 const host = process.env.HOST || '0.0.0.0';
@@ -284,6 +284,35 @@ setInterval(() => {
   lobby.sweepStale(staleMs);
 }, heartbeatMs).unref?.();
 
+/** Resolves when listening; rejects on bind failure (e.g. EADDRINUSE). */
+const ready = new Promise((resolve, reject) => {
+  const onListen = () => {
+    server.off('error', onErr);
+    resolve();
+  };
+  const onErr = (err) => {
+    server.off('listening', onListen);
+    reject(err);
+  };
+  server.once('listening', onListen);
+  server.once('error', onErr);
+});
+
+server.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error('');
+    console.error('[错误] 端口 ' + port + ' 已被占用（EADDRINUSE）。');
+    console.error('  · 关掉另一个联机服黑窗口后再试');
+    console.error('  · 或换端口：node server/deploy.mjs 4322');
+    console.error('  · Windows 查看占用：netstat -ano | findstr :' + port);
+  } else {
+    console.error('[错误] 无法监听 ' + host + ':' + port + ' —', err && err.message ? err.message : err);
+  }
+  // deploy.mjs awaits `ready` and exits; direct `node server/index.mjs` exits here
+  if (!process.env.SP_HOST_DEPLOY) process.exit(1);
+  process.exitCode = 1;
+});
+
 server.listen(port, host, () => {
   const deployed = !!loadHostInfo();
   console.log('══════════════════════════════════════');
@@ -306,4 +335,4 @@ server.listen(port, host, () => {
   console.log('══════════════════════════════════════');
 });
 
-export { server, lobby, VERSION };
+export { server, lobby, VERSION, ready };

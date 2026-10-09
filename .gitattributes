@@ -1,0 +1,3 @@
+# Windows launchers must keep CRLF or cmd.exe may flash-close on parse errors
+*.cmd text eol=crlf
+*.bat text eol=crlf

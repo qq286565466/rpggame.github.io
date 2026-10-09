@@ -17,8 +17,9 @@
 
 **Windows（PowerShell 报「禁止运行脚本」时）：**
 
-- 双击仓库根目录的 `启动联机服.cmd`，或
-- 在终端执行：`npm.cmd run deploy` / `node server\deploy.mjs 4321`
+- 双击仓库根目录的 `启动联机服.cmd`（或 `start-online.cmd` / `启用联机服.cmd`）
+- 窗口会保持打开；若端口被占用会显示中文错误，不会闪退
+- 也可在终端执行：`npm.cmd run deploy` / `node server\deploy.mjs 4321`
 
 可选：当前用户放开脚本（仅本机）  
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`

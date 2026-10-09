@@ -29,7 +29,7 @@ npm run online         # → http://127.0.0.1:4321  页面内点「联机」接�
 
 联机由仓库内 **Node 服务端**（`server/`）提供，零第三方依赖。
 
-1. **服主推荐**：运行 `npm run deploy`（Windows 用 `npm.cmd run deploy` 或双击 `启动联机服.cmd`）。
+1. **服主推荐**：运行 `npm run deploy`（Windows 用 `npm.cmd run deploy` 或双击 `启动联机服.cmd` / `start-online.cmd`）。
 2. **SakuraFrp 远程**：隧道选 TCP、本地 `127.0.0.1:4321`，再  
    `node server/deploy.mjs --public=http://你的访问地址`  
    把穿透页面或一键链接发给好友（详见 [server/FRP.md](./server/FRP.md)）。
