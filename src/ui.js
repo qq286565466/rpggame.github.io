@@ -73,6 +73,7 @@
           var starter = I.roll(SP.makeRng(20240501), { ilvl: 1, slot: 'weapon', rarityBias: 1.2 });
           starter.name = '新手·' + starter.baseName;
           ch.equipped.weapon = starter;
+          P.discoverGear(ch, starter);
           return ch;
         })()
       };
@@ -158,7 +159,9 @@
     this.bagPick = null;    // 材料或消耗品格子的 key
     this.floorPick = { camp: 0, forest: 0, cave: 0, nest: 0 };
     this.lootFeed = [];
+    this.bestiaryMode = 'monster'; // monster | gear | unique
     this.bestiaryBiome = 'camp';
+    this.bestiarySlot = 'weapon';
     this.bestiarySel = null;
   }
 
@@ -207,6 +210,13 @@
     $('#btnRecord').addEventListener('click', function () { self.togglePanel('record'); });
     $('#btnBestiary').addEventListener('click', function () { self.togglePanel('bestiary'); });
     $('#btnHelp').addEventListener('click', function () { self.togglePanel('help'); });
+    Array.prototype.forEach.call(doc.querySelectorAll('#bestiaryMode [data-mode]'), function (btn) {
+      btn.addEventListener('click', function () {
+        self.bestiaryMode = btn.getAttribute('data-mode') || 'monster';
+        self.bestiarySel = null;
+        self.renderBestiary();
+      });
+    });
 
     /* ---- 面板：关闭按钮 / 点遮罩关闭 ---- */
     Array.prototype.forEach.call(doc.querySelectorAll('[data-close]'), function (btn) {
@@ -1303,13 +1313,44 @@
   UI.prototype.renderBestiary = function () {
     var self = this;
     var ch = Accounts.char();
-    var prog = P.bestiaryProgress(ch);
-    var countEl = this.$('bestiaryCount');
-    if (countEl) countEl.textContent = prog.found + ' / ' + prog.total;
+    var mode = this.bestiaryMode || 'monster';
+    if (mode !== 'monster' && mode !== 'gear' && mode !== 'unique') mode = 'monster';
+    this.bestiaryMode = mode;
 
+    Array.prototype.forEach.call(doc.querySelectorAll('#bestiaryMode [data-mode]'), function (btn) {
+      btn.classList.toggle('on', btn.getAttribute('data-mode') === mode);
+    });
+
+    var titleEl = this.$('bestiaryTitle');
+    var leadEl = this.$('bestiaryLead');
+    var countEl = this.$('bestiaryCount');
+    var prog;
+    if (mode === 'gear') {
+      titleEl.textContent = '装备图鉴';
+      leadEl.textContent = '获得过的装备型号会解锁条目。记录获得次数与见过的最高品质。';
+      prog = P.gearCodexProgress(ch);
+    } else if (mode === 'unique') {
+      titleEl.textContent = '传说图鉴';
+      leadEl.textContent = '获得带独特效果的传说装备后解锁。未收录的显示为「？？？」';
+      prog = P.uniqueCodexProgress(ch);
+    } else {
+      titleEl.textContent = '怪物图鉴';
+      leadEl.textContent = '击败过的怪物会解锁条目。未遭遇的显示为「？？？」';
+      prog = P.bestiaryProgress(ch);
+    }
+    countEl.textContent = prog.found + ' / ' + prog.total;
+
+    if (mode === 'unique') this.renderUniqueCodex(ch);
+    else if (mode === 'gear') this.renderGearCodex(ch);
+    else this.renderMonsterCodex(ch);
+  };
+
+  UI.prototype.renderMonsterCodex = function (ch) {
+    var self = this;
     var catalog = P.bestiaryCatalog(ch);
     var tabs = this.$('bestiaryTabs');
     tabs.innerHTML = '';
+    tabs.classList.remove('hidden');
     if (!SP.BIOMES[this.bestiaryBiome]) this.bestiaryBiome = 'camp';
 
     catalog.forEach(function (group) {
@@ -1361,10 +1402,10 @@
     });
 
     var sel = group.entries.find(function (e) { return e.key === self.bestiarySel; }) || group.entries[0];
-    this.renderBestiaryDetail(sel);
+    this.renderMonsterDetail(sel);
   };
 
-  UI.prototype.renderBestiaryDetail = function (entry) {
+  UI.prototype.renderMonsterDetail = function (entry) {
     var box = this.$('bestiaryDetail');
     if (!entry || !entry.def) {
       box.innerHTML = '<div class="tiny muted">点选左侧条目查看详情</div>';
@@ -1402,6 +1443,185 @@
       '</div>';
   };
 
+  UI.prototype.renderGearCodex = function (ch) {
+    var self = this;
+    var catalog = P.gearCodexCatalog(ch);
+    var tabs = this.$('bestiaryTabs');
+    tabs.innerHTML = '';
+    tabs.classList.remove('hidden');
+    if (I.GEAR_SLOT_ORDER.indexOf(this.bestiarySlot) < 0) this.bestiarySlot = 'weapon';
+
+    catalog.forEach(function (group) {
+      var found = group.entries.filter(function (e) { return e.discovered; }).length;
+      var btn = el('button', 'bag-tab' + (self.bestiarySlot === group.slot ? ' on' : ''),
+        esc(group.name) + ' <span class="tiny muted">' + found + '/' + group.entries.length + '</span>');
+      btn.type = 'button';
+      btn.addEventListener('click', function () {
+        self.bestiarySlot = group.slot;
+        self.bestiarySel = null;
+        self.renderBestiary();
+      });
+      tabs.appendChild(btn);
+    });
+
+    var group = catalog.find(function (g) { return g.slot === self.bestiarySlot; }) || catalog[0];
+    var grid = this.$('bestiaryGrid');
+    grid.innerHTML = '';
+    if (!group) return;
+
+    var stillValid = group.entries.some(function (e) { return e.key === self.bestiarySel; });
+    if (!stillValid) {
+      var firstOpen = group.entries.find(function (e) { return e.discovered; });
+      self.bestiarySel = firstOpen ? firstOpen.key : group.entries[0].key;
+    }
+
+    group.entries.forEach(function (entry) {
+      var def = entry.def || {};
+      var card = el('button',
+        'be-card' + (entry.discovered ? '' : ' locked') +
+        (self.bestiarySel === entry.key ? ' sel' : ''));
+      card.type = 'button';
+      var name = entry.discovered ? def.name : '？？？';
+      var rarity = entry.discovered && entry.bestRarity && I.RARITY_BY_KEY[entry.bestRarity]
+        ? I.RARITY_BY_KEY[entry.bestRarity] : null;
+      var sub = entry.discovered
+        ? ('获得 ' + entry.count + (rarity ? ' · 最高 ' + rarity.name : ''))
+        : '获得后解锁';
+      var iconUrl = SP.ItemIcons && SP.ItemIcons.url(entry.key);
+      var iconHtml = iconUrl
+        ? '<img class="be-icon" alt="" src="' + iconUrl + '">'
+        : '<div class="be-portrait" style="background:#222836"></div>';
+      card.innerHTML =
+        iconHtml +
+        '<div class="be-meta"><div class="be-name"' +
+        (rarity ? ' style="color:' + rarity.color + '"' : '') + '>' + esc(name) + '</div>' +
+        '<div class="be-sub">' + esc(sub) + '</div></div>';
+      card.addEventListener('click', function () {
+        self.bestiarySel = entry.key;
+        self.renderBestiary();
+      });
+      grid.appendChild(card);
+    });
+
+    var sel = group.entries.find(function (e) { return e.key === self.bestiarySel; }) || group.entries[0];
+    this.renderGearDetail(sel);
+  };
+
+  UI.prototype.renderGearDetail = function (entry) {
+    var box = this.$('bestiaryDetail');
+    if (!entry || !entry.def) {
+      box.innerHTML = '<div class="tiny muted">点选左侧条目查看详情</div>';
+      return;
+    }
+    var def = entry.def;
+    var slotName = (I.SLOT_META[entry.slot] && I.SLOT_META[entry.slot].name) || entry.slot;
+    var iconUrl = SP.ItemIcons && SP.ItemIcons.url(entry.key);
+    if (!entry.discovered) {
+      box.innerHTML =
+        '<div class="bd-head">' +
+        (iconUrl
+          ? '<img class="bd-icon" alt="" src="' + iconUrl + '" style="filter:grayscale(1) brightness(.35)">'
+          : '<div class="bd-portrait" style="background:#222836"></div>') +
+        '<div><div class="bd-title">？？？</div>' +
+        '<div class="bd-tags"><span class="bd-tag">未收录</span><span class="bd-tag">' + esc(slotName) + '</span></div></div></div>' +
+        '<div class="bd-desc">这种装备型号尚未被记录。在副本中掉落或从商人处购得即可解锁。</div>';
+      return;
+    }
+    var rarity = entry.bestRarity && I.RARITY_BY_KEY[entry.bestRarity];
+    var tags = '<span class="bd-tag">' + esc(slotName) + '</span>' +
+      (rarity ? '<span class="bd-tag" style="color:' + rarity.color + '">最高 ' + esc(rarity.name) + '</span>' : '');
+    var wp = entry.slot === 'weapon' ? I.weaponProfile(entry.key) : null;
+    if (wp) tags += '<span class="bd-tag">' + esc(wp.label) + '</span>';
+    var statLines = Object.keys(def.stats || {}).map(function (k) {
+      return '<div><span>' + esc((I.STAT_META[k] && I.STAT_META[k].name) || k) + '</span><b>' +
+        esc(I.fmtValue(k, def.stats[k])) + '</b></div>';
+    }).join('');
+    box.innerHTML =
+      '<div class="bd-head">' +
+      (iconUrl ? '<img class="bd-icon" alt="" src="' + iconUrl + '">' : '<div class="bd-portrait" style="background:#445"></div>') +
+      '<div><div class="bd-title">' + esc(def.name) + '</div>' +
+      '<div class="bd-tags">' + tags + '</div></div></div>' +
+      '<div class="bd-desc">基础型号属性（随物品等级成长；下表为 1 级基准）。</div>' +
+      (wp ? '<div class="bd-tip">攻击方式：' + esc(wp.label) + ' · 射程 ' + Math.round(wp.range) + '</div>' : '') +
+      '<div class="bd-stats">' + statLines +
+      '<div><span>累计获得</span><b>' + entry.count + '</b></div>' +
+      (rarity ? '<div><span>最高品质</span><b class="bd-rarity" style="color:' + rarity.color + '">' + esc(rarity.name) + '</b></div>' : '') +
+      '</div>';
+  };
+
+  UI.prototype.renderUniqueCodex = function (ch) {
+    var self = this;
+    var tabs = this.$('bestiaryTabs');
+    tabs.innerHTML = '';
+    tabs.classList.add('hidden');
+
+    var entries = P.uniqueCodexCatalog(ch);
+    var grid = this.$('bestiaryGrid');
+    grid.innerHTML = '';
+
+    var stillValid = entries.some(function (e) { return e.key === self.bestiarySel; });
+    if (!stillValid) {
+      var firstOpen = entries.find(function (e) { return e.discovered; });
+      self.bestiarySel = firstOpen ? firstOpen.key : (entries[0] && entries[0].key);
+    }
+
+    entries.forEach(function (entry) {
+      var def = entry.def || {};
+      var card = el('button',
+        'be-card' + (entry.discovered ? '' : ' locked') + ' boss' +
+        (self.bestiarySel === entry.key ? ' sel' : ''));
+      card.type = 'button';
+      var name = entry.discovered ? def.name : '？？？';
+      var slotHint = def.slots && def.slots.length
+        ? def.slots.map(function (s) { return (I.SLOT_META[s] && I.SLOT_META[s].name) || s; }).join('/')
+        : '任意部位';
+      var sub = entry.discovered ? ('获得 ' + entry.count + ' · ' + slotHint) : '传说掉落解锁';
+      card.innerHTML =
+        '<div class="be-portrait" style="background:' + (entry.discovered ? 'linear-gradient(135deg,#5a3a12,#c48a3a)' : '#222836') + '"></div>' +
+        '<div class="be-meta"><div class="be-name">' + esc(name) + '</div>' +
+        '<div class="be-sub">' + esc(sub) + '</div></div>';
+      card.addEventListener('click', function () {
+        self.bestiarySel = entry.key;
+        self.renderBestiary();
+      });
+      grid.appendChild(card);
+    });
+
+    var sel = entries.find(function (e) { return e.key === self.bestiarySel; }) || entries[0];
+    this.renderUniqueDetail(sel);
+  };
+
+  UI.prototype.renderUniqueDetail = function (entry) {
+    var box = this.$('bestiaryDetail');
+    if (!entry || !entry.def) {
+      box.innerHTML = '<div class="tiny muted">点选左侧条目查看详情</div>';
+      return;
+    }
+    var def = entry.def;
+    var slotHint = def.slots && def.slots.length
+      ? def.slots.map(function (s) { return (I.SLOT_META[s] && I.SLOT_META[s].name) || s; }).join(' / ')
+      : '任意部位';
+    if (!entry.discovered) {
+      box.innerHTML =
+        '<div class="bd-head">' +
+        '<div class="bd-portrait" style="background:#222836"></div>' +
+        '<div><div class="bd-title">？？？</div>' +
+        '<div class="bd-tags"><span class="bd-tag">未收录</span><span class="bd-tag boss">传说</span></div></div></div>' +
+        '<div class="bd-desc">这条传说独特效果尚未被记录。掉落传说品质装备时有机会解锁。</div>' +
+        '<div class="bd-tip">限定部位：' + esc(slotHint) + '</div>';
+      return;
+    }
+    box.innerHTML =
+      '<div class="bd-head">' +
+      '<div class="bd-portrait" style="background:linear-gradient(135deg,#5a3a12,#c48a3a)"></div>' +
+      '<div><div class="bd-title">' + esc(def.name) + '</div>' +
+      '<div class="bd-tags"><span class="bd-tag boss">传说独特</span><span class="bd-tag">' + esc(slotHint) + '</span></div></div></div>' +
+      '<div class="bd-desc">' + esc(def.desc || '暂无描述。') + '</div>' +
+      '<div class="bd-stats">' +
+      '<div><span>累计获得</span><b>' + entry.count + '</b></div>' +
+      '</div>';
+  };
+
   /* ---------------------------------------------------------------- 战绩 */
   UI.prototype.renderRecord = function () {
     var ch = Accounts.char();
@@ -1409,9 +1629,13 @@
     var grid = this.$('recordGrid');
     grid.innerHTML = '';
     var bp = P.bestiaryProgress(ch);
+    var gp = P.gearCodexProgress(ch);
+    var up = P.uniqueCodexProgress(ch);
     [['本轮次数', s.runs || 0], ['通关次数', s.clears || 0], ['阵亡次数', s.deaths || 0],
      ['累计击杀', s.kills || 0], ['获得装备', s.lootFound || 0], ['角色等级', ch.level],
-     ['图鉴解锁', bp.found + ' / ' + bp.total]
+     ['怪物图鉴', bp.found + ' / ' + bp.total],
+     ['装备图鉴', gp.found + ' / ' + gp.total],
+     ['传说图鉴', up.found + ' / ' + up.total]
     ].forEach(function (row) {
       grid.appendChild(el('div', 'stat', '<b>' + row[1] + '</b><span>' + row[0] + '</span>'));
     });

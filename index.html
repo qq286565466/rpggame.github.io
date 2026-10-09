@@ -352,8 +352,21 @@
   .biome-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
   .modal.bestiary-modal { width: min(920px, 96vw); text-align: left; }
+  .bestiary-mode { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .bestiary-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-  .bestiary-tabs .bag-tab { min-width: 0; }
+  .bestiary-tabs .bag-tab, .bestiary-mode .bag-tab { min-width: 0; }
+  .be-card .be-icon {
+    width: 44px; height: 44px; border-radius: 8px; flex: 0 0 auto;
+    object-fit: contain; background: rgba(0,0,0,.25);
+    border: 1px solid rgba(255,255,255,.12); image-rendering: pixelated;
+  }
+  .be-card.locked .be-icon { filter: grayscale(1) brightness(.35); opacity: .75; }
+  .bd-icon {
+    width: 64px; height: 64px; border-radius: 10px; flex: 0 0 auto;
+    object-fit: contain; background: rgba(0,0,0,.28);
+    border: 1px solid rgba(255,255,255,.16); image-rendering: pixelated;
+  }
+  .bd-rarity { font-weight: 700; }
   .bestiary-layout {
     display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.85fr);
     gap: 12px; align-items: start;
@@ -944,16 +957,21 @@
       </div>
     </div>
 
-    <!-- 图鉴 -->
+    <!-- 图鉴（怪物 / 装备 / 传说） -->
     <div class="overlay" id="panelBestiary">
       <div class="panel modal bestiary-modal">
         <div class="modal-head">
-          <h2>怪物图鉴</h2>
+          <h2 id="bestiaryTitle">图鉴</h2>
           <span class="tiny muted" id="bestiaryCount">0 / 16</span>
           <span class="spacer"></span>
           <button class="ghost tiny-btn" data-close="panelBestiary">关闭 (G)</button>
         </div>
-        <p class="tiny muted" style="margin:0 0 10px;text-align:left">击败过的怪物会解锁条目。未遭遇的显示为「？？？」。</p>
+        <div class="bestiary-mode" id="bestiaryMode">
+          <button type="button" class="bag-tab on" data-mode="monster">怪物</button>
+          <button type="button" class="bag-tab" data-mode="gear">装备</button>
+          <button type="button" class="bag-tab" data-mode="unique">传说</button>
+        </div>
+        <p class="tiny muted" id="bestiaryLead" style="margin:0 0 10px;text-align:left">击败过的怪物会解锁条目。未遭遇的显示为「？？？」。</p>
         <div class="bestiary-tabs" id="bestiaryTabs"></div>
         <div class="bestiary-layout">
           <div class="bestiary-grid" id="bestiaryGrid"></div>
@@ -980,7 +998,7 @@
           <b>武器类型</b>：短剑挥砍 · 战斧横劈 · 匕首连刺 · 重锤砸击（震波）· 长枪突刺 · 短弓射箭 · 法杖奥术弹（可穿透）· 链锤回旋。<br><br>
           <b>藏身处</b>：走到 NPC 面前按 <span class="key">F</span> 交互 —— 铁匠负责强化/重铸/分解，商人负责补给与神秘装备，
           时空传送门用来选择副本层级。背包 / 传送门 / 战绩 / 图鉴 都可以用下方按钮或快捷键直接打开。<br><br>
-          <b>图鉴</b>：按 <span class="key">G</span> 打开怪物图鉴。击败过的怪物会解锁名称、习性与击杀统计；未遭遇的显示为「？？？」。<br><br>
+          <b>图鉴</b>：按 <span class="key">G</span> 打开图鉴，可切换怪物 / 装备 / 传说。击败怪物或获得装备后解锁条目；未收录的显示为「？？？」。<br><br>
           <b>副本</b>：刷够击杀配额后关底首领出现，击败即通关并解锁更深一层。
           怪物等级越高，掉落装备的物品等级也越高；装备跟不上就会打不动、也扛不住，需要回浅层刷装备。<br><br>
           <b>装备</b>：7 个部位、5 种品质、随机词条。强化每级 +7% 全属性；重铸保留词条种类重掷数值；

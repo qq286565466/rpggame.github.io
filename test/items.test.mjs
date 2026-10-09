@@ -276,6 +276,18 @@ test('各部位都能独立生成，且主属性符合部位定位', () => {
   }
 });
 
+test('allBases / BASE_BY_KEY 覆盖全部装备型号', () => {
+  const all = I.allBases();
+  assert.ok(all.length >= 20, '装备型号数量应完整');
+  const keys = new Set(all.map((b) => b.key));
+  assert.equal(keys.size, all.length, 'base key 不应重复');
+  for (const b of all) {
+    assert.ok(I.BASE_BY_KEY[b.key], 'BASE_BY_KEY 缺少 ' + b.key);
+    assert.equal(I.BASE_BY_KEY[b.key].slot, b.slot);
+  }
+  assert.deepEqual(I.GEAR_SLOT_ORDER, I.DROP_SLOTS);
+});
+
 test('武器基础型号覆盖八种，并各自对应攻击档案', () => {
   const keys = I.BASES.weapon.map((b) => b.key);
   assert.deepEqual(keys.slice().sort(), ['axe', 'bow', 'dagger', 'flail', 'maul', 'spear', 'staff', 'sword']);

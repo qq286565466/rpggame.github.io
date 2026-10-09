@@ -25,6 +25,8 @@
   };
   /** 掉落时可生成的部位（戒指两槽共用一种） */
   var DROP_SLOTS = ['weapon', 'helm', 'armor', 'boots', 'amulet', 'ring'];
+  /** 装备图鉴页签顺序 */
+  var GEAR_SLOT_ORDER = DROP_SLOTS.slice();
 
   /* ------------------------------------------------------------ 稀有度 */
   var RARITIES = [
@@ -184,6 +186,23 @@
       { key: 'signet', name: '秘宝印戒', stats: { luck: 6, skillDmg: 6 } }
     ]
   };
+
+  var BASE_BY_KEY = {};
+  Object.keys(BASES).forEach(function (slot) {
+    BASES[slot].forEach(function (b) {
+      BASE_BY_KEY[b.key] = { key: b.key, slot: slot === 'ring' ? 'ring' : slot, name: b.name, stats: b.stats };
+    });
+  });
+
+  function allBases() {
+    var out = [];
+    GEAR_SLOT_ORDER.forEach(function (slot) {
+      (BASES[slot] || []).forEach(function (b) {
+        out.push({ key: b.key, slot: slot, name: b.name, stats: b.stats });
+      });
+    });
+    return out;
+  }
 
   /* --------------------------------------------------- 传说独特效果（由 sim 生效）
    * slots 缺省 = 任意部位；写了则仅该部位传说可 roll 到（用于传说武器专属效果） */
@@ -461,6 +480,9 @@
     AFFIXES: AFFIXES,
     AFFIX_BY_KEY: AFFIX_BY_KEY,
     BASES: BASES,
+    BASE_BY_KEY: BASE_BY_KEY,
+    GEAR_SLOT_ORDER: GEAR_SLOT_ORDER,
+    allBases: allBases,
     WEAPON_PROFILES: WEAPON_PROFILES,
     UNIQUES: UNIQUES,
     UNIQUE_BY_KEY: UNIQUE_BY_KEY,

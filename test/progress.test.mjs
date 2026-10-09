@@ -325,6 +325,40 @@ test('图鉴：normalize 清洗坏数据，catalog 覆盖全部群系', () => {
   assert.ok(!camp.entries.find((e) => e.key === 'bat').discovered);
 });
 
+test('装备图鉴：入账解锁型号与传说，normalize 回填旧档', () => {
+  const ch = P.newCharacter('装备图鉴');
+  assert.deepEqual(P.gearCodexProgress(ch), { found: 0, total: I.allBases().length });
+  const sword = item(20, 'weapon', 501);
+  sword.base = 'sword';
+  sword.rarity = 'rare';
+  const bow = item(24, 'weapon', 502);
+  bow.base = 'bow';
+  bow.rarity = 'legendary';
+  bow.unique = 'multishot';
+  P.addLoot(ch, [sword, bow]);
+  assert.ok(P.isGearDiscovered(ch, 'sword'));
+  assert.ok(P.isGearDiscovered(ch, 'bow'));
+  assert.ok(P.isUniqueDiscovered(ch, 'multishot'));
+  assert.equal(ch.gearCodex.bases.bow.bestRarity, 'legendary');
+  assert.equal(ch.gearCodex.bases.sword.count, 1);
+
+  const backfill = P.normalize({
+    name: '旧档',
+    inventory: [item(10, 'helm', 503)],
+    equipped: { weapon: item(12, 'weapon', 504), helm: null, armor: null, boots: null, amulet: null, ring1: null, ring2: null },
+    gearCodex: { bases: { nope: { count: 3 } }, uniques: { fake: { count: 1 } } }
+  });
+  assert.equal(backfill.gearCodex.bases.nope, undefined);
+  assert.equal(backfill.gearCodex.uniques.fake, undefined);
+  assert.ok(P.isGearDiscovered(backfill, backfill.inventory[0].base));
+  assert.ok(P.isGearDiscovered(backfill, backfill.equipped.weapon.base));
+
+  const gearCat = P.gearCodexCatalog(ch);
+  assert.equal(gearCat.length, I.GEAR_SLOT_ORDER.length);
+  assert.equal(gearCat.reduce((n, g) => n + g.entries.length, 0), I.allBases().length);
+  assert.equal(P.uniqueCodexCatalog(ch).length, I.UNIQUES.length);
+});
+
 test('通关营地 3 层后森林解锁', () => {
   const ch = P.newCharacter();
   for (let f = 1; f <= 3; f++) {

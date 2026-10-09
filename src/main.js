@@ -616,6 +616,25 @@
               thornbeast: { kills: 4, elites: 1 },
               queen: { kills: 1, elites: 1 }
             });
+            // 预填若干装备 / 传说图鉴，便于截图
+            var seedRng = SP.makeRng(424242);
+            ['sword', 'bow', 'staff', 'flail', 'hood', 'vest', 'plate', 'lightboots', 'amulet', 'coinring'].forEach(function (base, i) {
+              var def = I.BASE_BY_KEY[base];
+              if (!def) return;
+              var it = I.roll(seedRng, { ilvl: 20 + i, slot: def.slot, rarityBias: 1.2 + i * 0.15 });
+              it.base = base;
+              it.baseName = def.name;
+              P.discoverGear(hubCh, it);
+            });
+            P.discoverGear(hubCh, {
+              base: 'bow', rarity: 'legendary', unique: 'multishot', slot: 'weapon', stats: {}
+            });
+            P.discoverGear(hubCh, {
+              base: 'staff', rarity: 'legendary', unique: 'overcharge', slot: 'weapon', stats: {}
+            });
+            P.discoverGear(hubCh, {
+              base: 'amulet', rarity: 'legendary', unique: 'swift', slot: 'amulet', stats: {}
+            });
           }
           ui.openPanel(sub);
         }
