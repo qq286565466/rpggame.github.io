@@ -471,39 +471,74 @@
     return { boss: boss };
   };
 
-  /** 普攻实际命中的扇形：半径是挥砍距离，张角与判定一致。 */
+  /** 普攻范围提示：随武器类型变化（扇形 / 满圈 / 远程瞄准线）。 */
   Renderer.prototype.drawAttackArc = function (ctx, world, S, opts) {
     var p = world.player;
     if (!p || world.dead) return;
     var sp = S(p.x, p.y);
     var range = p.range;
     var arc = p.arcWidth;
+    var style = (p.weapon && p.weapon.style) || 'slash';
     var hot = !!(opts && opts.autoLock);
     var tracking = !hot && !!(opts && opts.autoAim);
+    var fill = hot ? 'rgba(150, 230, 255, 0.22)'
+      : tracking ? 'rgba(160, 220, 255, 0.16)'
+      : 'rgba(186, 210, 255, 0.12)';
+    var stroke = hot ? 'rgba(220, 248, 255, 0.92)'
+      : tracking ? 'rgba(180, 230, 255, 0.78)'
+      : 'rgba(206, 224, 255, 0.62)';
     ctx.save();
     ctx.translate(sp.x, sp.y);
     ctx.rotate(p.facing);
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.arc(0, 0, range, -arc / 2, arc / 2);
-    ctx.closePath();
-    ctx.fillStyle = hot ? 'rgba(150, 230, 255, 0.22)'
-      : tracking ? 'rgba(160, 220, 255, 0.16)'
-      : 'rgba(186, 210, 255, 0.12)';
-    ctx.fill();
-    ctx.strokeStyle = hot ? 'rgba(220, 248, 255, 0.92)'
-      : tracking ? 'rgba(180, 230, 255, 0.78)'
-      : 'rgba(206, 224, 255, 0.62)';
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = stroke;
     ctx.lineWidth = hot ? 2 : 1.5;
-    ctx.beginPath();
-    ctx.arc(0, 0, range, -arc / 2, arc / 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(Math.cos(-arc / 2) * 16, Math.sin(-arc / 2) * 16);
-    ctx.lineTo(Math.cos(-arc / 2) * range, Math.sin(-arc / 2) * range);
-    ctx.moveTo(Math.cos(arc / 2) * 16, Math.sin(arc / 2) * 16);
-    ctx.lineTo(Math.cos(arc / 2) * range, Math.sin(arc / 2) * range);
-    ctx.stroke();
+
+    if (style === 'shot' || style === 'bolt') {
+      // 远程：细长瞄准锥 + 最远距离刻度
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, range, -arc / 2, arc / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(18, 0);
+      ctx.lineTo(range, 0);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 0, range, -0.12, 0.12);
+      ctx.stroke();
+    } else if (style === 'spin') {
+      ctx.beginPath();
+      ctx.arc(0, 0, range, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 0, Math.max(18, range * 0.35), 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, range, -arc / 2, arc / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(0, 0, range, -arc / 2, arc / 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(-arc / 2) * 16, Math.sin(-arc / 2) * 16);
+      ctx.lineTo(Math.cos(-arc / 2) * range, Math.sin(-arc / 2) * range);
+      ctx.moveTo(Math.cos(arc / 2) * 16, Math.sin(arc / 2) * 16);
+      ctx.lineTo(Math.cos(arc / 2) * range, Math.sin(arc / 2) * range);
+      ctx.stroke();
+      if (style === 'smash' && p.weapon && p.weapon.smashR) {
+        ctx.strokeStyle = hot ? 'rgba(255, 210, 140, 0.85)' : 'rgba(255, 200, 120, 0.45)';
+        ctx.beginPath();
+        ctx.arc(0, 0, p.weapon.smashR, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
     ctx.restore();
   };
 
