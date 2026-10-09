@@ -3,13 +3,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.8.0';
+  SP.VERSION = '2.8.1';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.8.1',
+      date: '2026-10-09',
+      title: '角色待机动作',
+      items: [
+        '主角静止时呼吸起伏与轻摇，走动时减弱待机叠加步伐',
+        '铁匠、商人各自错开节奏的待机：呼吸、点头/轻晃，走近更有精神',
+        '脚下影子随呼吸轻微缩放'
+      ]
+    },
     {
       version: '2.8.0',
       date: '2026-10-09',
