@@ -15,6 +15,14 @@
    # 或
    node server/deploy.mjs 4321
 
+【Windows PowerShell 报「禁止运行脚本」】
+这是系统拦截了 npm.ps1，不是游戏坏了。任选其一：
+
+   1) 双击仓库根目录「启动联机服.cmd」
+   2) npm.cmd run deploy
+   3) node server\deploy.mjs 4321
+   4) 可选：Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+
 【本包文件】
 - deploy.mjs      一键部署入口（探测 IP → 提示端口映射 → 启动服务）
 - hostinfo.mjs    局域网/公网 IP 探测与服主卡片文案
