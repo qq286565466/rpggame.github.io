@@ -275,28 +275,7 @@
       if (inp) inp.click();
     });
     $('#btnOnline').addEventListener('click', function () { self.togglePanel('online'); });
-    var urlInp = doc.getElementById('onlineUrl');
-    if (urlInp && SP.OnlineClient) {
-      var fromQuery = '';
-      try {
-        var qs = new URLSearchParams(global.location && global.location.search || '');
-        fromQuery = qs.get('ws') || qs.get('online') || '';
-      } catch (e) { fromQuery = ''; }
-      urlInp.value = fromQuery
-        ? SP.OnlineClient.normalizeWsUrl(fromQuery)
-        : SP.OnlineClient.defaultWsUrl();
-      urlInp.placeholder = 'ws://主机:端口/ws 或穿透地址';
-      // 带 ?ws= 的一键加入链接：进入后提示可直接接入
-      if (fromQuery) {
-        self._pendingOnlineUrl = urlInp.value;
-      }
-    }
-    $('#btnOnlineConnect').addEventListener('click', function () {
-      var raw = self.$('onlineUrl').value;
-      var norm = SP.OnlineClient ? SP.OnlineClient.normalizeWsUrl(raw) : raw;
-      if (self.$('onlineUrl')) self.$('onlineUrl').value = norm;
-      if (self.hooks.onOnlineConnect) self.hooks.onOnlineConnect(norm);
-    });
+    self._initMultiplayerUi();
     $('#btnOnlineDisconnect').addEventListener('click', function () {
       if (self.hooks.onOnlineDisconnect) self.hooks.onOnlineDisconnect();
     });
@@ -454,7 +433,16 @@
     this.closeAllPanels();
     this.$(PANEL_IDS[key]).classList.add('active');
     this.activePanel = key;
+    var onlineNet = null;
+    if (key === 'online') {
+      onlineNet = this.hooks.getOnline && this.hooks.getOnline();
+      if (onlineNet && onlineNet.connected) this._mpShowView('lobby');
+      else if (!this._mpView || this._mpView === 'lobby') this._mpShowView('list');
+    }
     this.refreshPanel(key);
+    if (key === 'online' && (!onlineNet || !onlineNet.connected) && this._mpView === 'list') {
+      this._mpRefreshProbes();
+    }
     if (changed) this.sound && this.sound.play('click');
   };
   UI.prototype.togglePanel = function (key) {
@@ -574,15 +562,20 @@
   UI.prototype.enterHideout = function () {
     if (!this.hideout) this.hideout = new SP.Hideout();
     this.showScreen('hideout');
-    // 一键加入链接 ?ws=… ：进入藏身处后打开联机面板并填好地址
+    // 一键加入链接 ?ws=… ：进入后打开「直接连接」并填好地址
     if (this._pendingOnlineUrl) {
       var joinUrl = this._pendingOnlineUrl;
       this._pendingOnlineUrl = null;
       var self = this;
       global.setTimeout(function () {
+        var addr = SP.OnlineClient
+          ? SP.OnlineClient.toServerAddress(joinUrl)
+          : joinUrl;
         if (self.$('onlineUrl')) self.$('onlineUrl').value = joinUrl;
+        if (self.$('mpDirectAddr')) self.$('mpDirectAddr').value = addr;
         self.openPanel('online');
-        self.flash('已填入服主联机地址，点「接入大厅」即可', true);
+        self._mpShowView('direct');
+        self.flash('已填入服主地址，点「加入服务器」即可', true);
       }, 180);
     }
   };
@@ -612,14 +605,292 @@
     el.style.color = ok ? '#9dffb0' : '';
   };
 
+  /* ------------------------------------ Minecraft 式多人：服务器列表 */
+  var MP_STORAGE_KEY = 'sp_mp_servers_v1';
+
+  UI.prototype._initMultiplayerUi = function () {
+    var self = this;
+    this._mpServers = this._loadMpServers();
+    this._mpSelectedId = this._mpServers[0] ? this._mpServers[0].id : null;
+    this._mpEditId = null;
+    this._mpProbe = {};
+
+    var fromQuery = '';
+    try {
+      var qs = new URLSearchParams(global.location && global.location.search || '');
+      fromQuery = qs.get('ws') || qs.get('online') || '';
+    } catch (e) { fromQuery = ''; }
+    if (fromQuery && SP.OnlineClient) {
+      var norm = SP.OnlineClient.normalizeWsUrl(fromQuery);
+      if (this.$('onlineUrl')) this.$('onlineUrl').value = norm;
+      this._pendingOnlineUrl = norm;
+    } else if (SP.OnlineClient && this.$('onlineUrl')) {
+      this.$('onlineUrl').value = SP.OnlineClient.defaultWsUrl();
+    }
+
+    var bind = function (id, fn) {
+      var node = self.$(id);
+      if (node) node.addEventListener('click', fn);
+    };
+    bind('btnMpJoin', function () { self._mpJoinSelected(); });
+    bind('btnMpDirect', function () { self._mpShowView('direct'); });
+    bind('btnMpAdd', function () { self._mpOpenEdit(null); });
+    bind('btnMpEdit', function () { self._mpOpenEdit(self._mpSelectedId); });
+    bind('btnMpDelete', function () { self._mpDeleteSelected(); });
+    bind('btnMpRefresh', function () { self._mpRefreshProbes(); });
+    bind('btnMpDirectJoin', function () {
+      var raw = self.$('mpDirectAddr') && self.$('mpDirectAddr').value;
+      self._mpConnectAddress(raw);
+    });
+    bind('btnMpDirectBack', function () { self._mpShowView('list'); });
+    bind('btnMpEditSave', function () { self._mpSaveEdit(); });
+    bind('btnMpEditBack', function () { self._mpShowView('list'); });
+    bind('btnMpBackToList', function () { self._mpShowView('list'); });
+    // 兼容旧隐藏按钮
+    bind('btnOnlineConnect', function () {
+      var raw = self.$('onlineUrl') && self.$('onlineUrl').value;
+      self._mpConnectAddress(raw);
+    });
+    var directInp = this.$('mpDirectAddr');
+    if (directInp) {
+      directInp.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          self._mpConnectAddress(directInp.value);
+        }
+      });
+    }
+  };
+
+  UI.prototype._loadMpServers = function () {
+    var list = [];
+    try {
+      var raw = global.localStorage && global.localStorage.getItem(MP_STORAGE_KEY);
+      if (raw) list = JSON.parse(raw) || [];
+    } catch (e) { list = []; }
+    if (!Array.isArray(list)) list = [];
+    list = list.filter(function (s) {
+      return s && s.id && s.address;
+    }).map(function (s) {
+      return {
+        id: String(s.id),
+        name: String(s.name || '服务器').slice(0, 32),
+        address: String(s.address).trim()
+      };
+    });
+    if (!list.length) {
+      list.push({ id: 'local', name: '本地联机服', address: '127.0.0.1:4321' });
+      if (typeof location !== 'undefined' && location.protocol !== 'file:' && location.host) {
+        var hostAddr = location.host;
+        if (hostAddr !== '127.0.0.1:4321' && hostAddr !== 'localhost:4321') {
+          list.push({ id: 'current', name: '当前页面服务器', address: hostAddr });
+        }
+      }
+    }
+    return list;
+  };
+
+  UI.prototype._saveMpServers = function () {
+    try {
+      if (global.localStorage) {
+        global.localStorage.setItem(MP_STORAGE_KEY, JSON.stringify(this._mpServers || []));
+      }
+    } catch (e) { /* ignore */ }
+  };
+
+  UI.prototype._mpShowView = function (name) {
+    var views = ['list', 'direct', 'edit', 'lobby'];
+    for (var i = 0; i < views.length; i++) {
+      var elView = this.$('mpView' + views[i].charAt(0).toUpperCase() + views[i].slice(1));
+      if (elView) elView.classList.toggle('active', views[i] === name);
+    }
+    this._mpView = name;
+    if (name === 'list') this._renderMpServerList();
+  };
+
+  UI.prototype._mpFind = function (id) {
+    var list = this._mpServers || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  };
+
+  UI.prototype._renderMpServerList = function () {
+    var self = this;
+    var box = this.$('mpServerList');
+    if (!box) return;
+    box.innerHTML = '';
+    var list = this._mpServers || [];
+    if (!list.length) {
+      box.innerHTML = '<div class="tiny muted" style="padding:12px">还没有服务器。点「添加服务器」或「直接连接」。</div>';
+      return;
+    }
+    list.forEach(function (s) {
+      var probe = (self._mpProbe && self._mpProbe[s.id]) || null;
+      var btn = doc.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mp-server-row' + (s.id === self._mpSelectedId ? ' selected' : '');
+      btn.setAttribute('role', 'option');
+      btn.setAttribute('aria-selected', s.id === self._mpSelectedId ? 'true' : 'false');
+      var pingHtml = '<span class="mp-ping">…</span>';
+      var motd = '';
+      if (probe) {
+        if (probe.ok) {
+          pingHtml = '<span class="mp-ping ok">' + (probe.rtt != null ? probe.rtt + ' ms' : '在线') + '</span>';
+          motd = (probe.online != null ? (probe.online + ' 人在线') : '可加入') +
+            (probe.version ? ' · v' + probe.version : '');
+        } else {
+          pingHtml = '<span class="mp-ping bad">无法连接</span>';
+          motd = probe.error || '服务器未响应';
+        }
+      }
+      btn.innerHTML =
+        '<div><div class="mp-name">' + esc(s.name) + '</div>' +
+        '<div class="mp-addr">' + esc(s.address) + '</div></div>' +
+        pingHtml +
+        (motd ? '<div class="mp-motd">' + esc(motd) + '</div>' : '');
+      btn.addEventListener('click', function () {
+        self._mpSelectedId = s.id;
+        self._renderMpServerList();
+      });
+      btn.addEventListener('dblclick', function () {
+        self._mpSelectedId = s.id;
+        self._mpJoinSelected();
+      });
+      box.appendChild(btn);
+    });
+  };
+
+  UI.prototype._mpRefreshProbes = function () {
+    var self = this;
+    var list = this._mpServers || [];
+    if (!SP.OnlineClient || !SP.OnlineClient.probeServer) {
+      this.flash('联机模块未加载');
+      return;
+    }
+    if (!list.length) return;
+    this.flash('正在刷新服务器…', true);
+    var pending = list.length;
+    list.forEach(function (s) {
+      SP.OnlineClient.probeServer(s.address).then(function (res) {
+        self._mpProbe[s.id] = res;
+        pending--;
+        if (self._mpView === 'list' || !self._mpView) self._renderMpServerList();
+        if (pending <= 0 && self.activePanel === 'online') {
+          self.flash('服务器列表已刷新', true);
+        }
+      });
+    });
+  };
+
+  UI.prototype._mpJoinSelected = function () {
+    var s = this._mpFind(this._mpSelectedId);
+    if (!s) {
+      this.flash('请先选择一个服务器');
+      return;
+    }
+    this._mpConnectAddress(s.address);
+  };
+
+  UI.prototype._mpConnectAddress = function (raw) {
+    var addr = String(raw == null ? '' : raw).trim();
+    if (!addr) {
+      this.flash('请输入服务器地址');
+      return;
+    }
+    if (!SP.OnlineClient) {
+      this.flash('联机模块未加载');
+      return;
+    }
+    var norm = SP.OnlineClient.normalizeWsUrl(addr);
+    var display = SP.OnlineClient.toServerAddress(norm);
+    if (this.$('onlineUrl')) this.$('onlineUrl').value = norm;
+    if (this.$('mpDirectAddr')) this.$('mpDirectAddr').value = display;
+    if (this.hooks.onOnlineConnect) this.hooks.onOnlineConnect(norm);
+  };
+
+  UI.prototype._mpOpenEdit = function (id) {
+    this._mpEditId = id || null;
+    var s = id ? this._mpFind(id) : null;
+    if (id && !s) {
+      this.flash('请先选择一个服务器');
+      return;
+    }
+    if (this.$('mpEditName')) this.$('mpEditName').value = s ? s.name : '';
+    if (this.$('mpEditAddr')) this.$('mpEditAddr').value = s ? s.address : '';
+    this._mpShowView('edit');
+  };
+
+  UI.prototype._mpSaveEdit = function () {
+    var name = (this.$('mpEditName') && this.$('mpEditName').value || '').trim().slice(0, 32);
+    var address = (this.$('mpEditAddr') && this.$('mpEditAddr').value || '').trim();
+    if (!address) {
+      this.flash('请填写服务器地址');
+      return;
+    }
+    if (!name) name = '服务器';
+    if (SP.OnlineClient) {
+      address = SP.OnlineClient.toServerAddress(address);
+    }
+    if (this._mpEditId) {
+      var cur = this._mpFind(this._mpEditId);
+      if (cur) {
+        cur.name = name;
+        cur.address = address;
+        this._mpSelectedId = cur.id;
+      }
+    } else {
+      var id = 's' + Date.now().toString(36);
+      this._mpServers.push({ id: id, name: name, address: address });
+      this._mpSelectedId = id;
+    }
+    this._saveMpServers();
+    this._mpShowView('list');
+    this._mpRefreshProbes();
+    this.flash('服务器已保存', true);
+  };
+
+  UI.prototype._mpDeleteSelected = function () {
+    var id = this._mpSelectedId;
+    if (!id) {
+      this.flash('请先选择一个服务器');
+      return;
+    }
+    var s = this._mpFind(id);
+    if (!s) return;
+    if (!global.confirm('删除服务器「' + s.name + '」？')) return;
+    this._mpServers = (this._mpServers || []).filter(function (x) { return x.id !== id; });
+    this._mpSelectedId = this._mpServers[0] ? this._mpServers[0].id : null;
+    if (this._mpProbe) delete this._mpProbe[id];
+    this._saveMpServers();
+    this._renderMpServerList();
+    this.flash('已删除', true);
+  };
+
   UI.prototype.renderOnline = function () {
     var self = this;
     var net = this.hooks.getOnline && this.hooks.getOnline();
     var partyEl = this.$('onlineParty');
     var listEl = this.$('onlinePeerList');
+    var info = this.$('mpConnectedInfo');
+
+    if (net && net.connected) {
+      this._mpShowView('lobby');
+      if (info) {
+        var addr = SP.OnlineClient ? SP.OnlineClient.toServerAddress(net.url) : net.url;
+        info.innerHTML = '<b>已加入</b> · ' + esc(addr) +
+          (net.rttMs != null ? ' · 延迟 ' + net.rttMs + ' ms' : '') +
+          '<div class="tiny muted" style="margin-top:4px">你已进入联机藏身处；可组队或直接去传送门单刷。</div>';
+      }
+    } else if (this._mpView === 'lobby' || !this._mpView) {
+      this._mpShowView('list');
+    } else if (this._mpView === 'list') {
+      this._renderMpServerList();
+    }
+
+    if (!partyEl || !listEl) return;
     if (!net || !net.connected) {
-      partyEl.textContent = '尚未接入大厅。';
-      listEl.innerHTML = '<div class="tiny muted">接入后可看到其他旅人。</div>';
+      partyEl.textContent = '尚未加入服务器。';
+      listEl.innerHTML = '<div class="tiny muted">加入后可看到其他旅人。</div>';
       return;
     }
     if (net.party && net.party.members) {
@@ -639,7 +910,7 @@
     }
     peers.forEach(function (p) {
       var row = el('div', 'row', '');
-      row.style.cssText = 'justify-content:space-between;align-items:center;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.03)';
+      row.style.cssText = 'justify-content:space-between;align-items:center;padding:6px 8px;background:rgba(255,255,255,.03)';
       var left = el('div', 'tiny', '');
       left.innerHTML = '<b>' + esc(p.name) + '</b> · Lv.' + (p.level || 1) +
         (p.inDungeon ? ' <span class="muted">（副本中）</span>' : '') +
@@ -668,7 +939,7 @@
       bar.innerHTML = '联机组队 · ' + net.party.members.length + ' 人' +
         (isLeader ? ' · 你是队长，点进入将带领全队出发' : ' · 等待队长发车');
     } else {
-      bar.textContent = '联机已接入 · 将以单刷进入（可先在「联机」面板组队）';
+      bar.textContent = '已加入服务器 · 将以单刷进入（可先在「联机」里组队）';
     }
   };
 

@@ -674,6 +674,32 @@
 
   .overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(4, 3, 12, .74); backdrop-filter: blur(5px); z-index: 30; }
   .overlay.active { display: flex; }
+  /* Minecraft 式多人：服务器列表 / 直接连接 */
+  .mp-view { display: none; }
+  .mp-view.active { display: block; }
+  .mp-server-list {
+    display: flex; flex-direction: column; gap: 4px;
+    min-height: 180px; max-height: min(42vh, 320px); overflow: auto;
+    margin: 0 0 10px; padding: 4px;
+    border: 1px solid var(--line); background: rgba(0, 0, 0, .22);
+  }
+  .mp-server-row {
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 12px;
+    padding: 8px 10px; text-align: left; cursor: pointer;
+    border: 1px solid transparent; background: transparent; color: inherit;
+    font: inherit;
+  }
+  .mp-server-row:hover { background: rgba(255, 255, 255, .04); }
+  .mp-server-row.selected { border-color: rgba(180, 210, 160, .55); background: rgba(120, 160, 90, .12); }
+  .mp-server-row .mp-name { font-weight: 650; }
+  .mp-server-row .mp-addr { font-size: 12px; opacity: .72; word-break: break-all; }
+  .mp-server-row .mp-motd { grid-column: 1 / -1; font-size: 12px; opacity: .8; }
+  .mp-server-row .mp-ping { font-size: 12px; align-self: center; white-space: nowrap; }
+  .mp-server-row .mp-ping.ok { color: #9dffb0; }
+  .mp-server-row .mp-ping.bad { color: #ff9d9d; }
+  .mp-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; text-align: left; }
+  .mp-field label { font-size: 12px; opacity: .75; }
+  .mp-actions { gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
   .modal { padding: 22px; width: min(640px, 94vw); max-height: 92vh; overflow-y: auto; text-align: center; }
   .modal h2 { margin: 0 0 5px; font-size: 25px; letter-spacing: 3px; }
   .modal .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
@@ -911,7 +937,7 @@
         <span class="tiny hidden" id="storeWarn" style="color:#ffb27a">⚠ 浏览器禁用了本地存储，进度不会被保存</span>
         <span class="tiny muted" id="hubPing">延迟 -- ms</span>
         <span class="tiny muted" id="onlineStatus">离线</span>
-        <button id="btnOnline" class="ghost tiny-btn" title="多人联机大厅">联机</button>
+        <button id="btnOnline" class="ghost tiny-btn" title="多人游戏（服务器列表）">联机</button>
         <button id="btnExportSave" class="ghost tiny-btn" title="导出本地存档 JSON">导出</button>
         <button id="btnImportSave" class="ghost tiny-btn" title="从 JSON 导入存档">导入</button>
         <input type="file" id="importSaveFile" accept="application/json,.json" class="hidden" aria-hidden="true">
@@ -1018,31 +1044,83 @@
       </div>
     </div>
 
-    <!-- 多人联机大厅 -->
+    <!-- 多人游戏（Minecraft 式：服务器列表 / 直接连接） -->
     <div class="overlay" id="panelOnline">
-      <div class="panel modal" style="width:min(560px,94vw);text-align:left">
+      <div class="panel modal" style="width:min(640px,96vw);text-align:left">
         <div class="modal-head">
-          <h2 style="text-align:left">多人联机</h2>
+          <h2 style="text-align:left">多人游戏</h2>
           <span class="spacer"></span>
           <button class="ghost tiny-btn" data-close="panelOnline">关闭 (Esc)</button>
         </div>
-        <p class="tiny muted" style="margin:0 0 10px">
-          服主：<code>npm run deploy</code>；用 SakuraFrp 时加
-          <code>--public=http://访问地址</code>，把穿透页面/一键链接发给好友。
-          好友联机栏填 <code>ws://访问地址/ws</code>（https 穿透用 wss）。
-        </p>
-        <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
-          <input id="onlineUrl" type="text" placeholder="ws://主机:端口/ws 或穿透地址" style="flex:1;min-width:180px">
-          <button id="btnOnlineConnect" class="primary tiny-btn">接入大厅</button>
-          <button id="btnOnlineDisconnect" class="ghost tiny-btn">断开</button>
+
+        <!-- 服务器列表 -->
+        <div id="mpViewList" class="mp-view active">
+          <p class="tiny muted" style="margin:0 0 8px">
+            玩法类似 Minecraft：服主开服后把 <b>地址:端口</b> 发给好友；
+            好友可「直接连接」，或「添加服务器」后从列表加入。
+          </p>
+          <div id="mpServerList" class="mp-server-list" role="listbox" aria-label="服务器列表"></div>
+          <div class="row mp-actions">
+            <button id="btnMpJoin" class="primary tiny-btn">加入服务器</button>
+            <button id="btnMpDirect" class="tiny-btn">直接连接</button>
+            <button id="btnMpAdd" class="tiny-btn">添加服务器</button>
+            <button id="btnMpEdit" class="ghost tiny-btn">编辑</button>
+            <button id="btnMpDelete" class="ghost tiny-btn">删除</button>
+            <button id="btnMpRefresh" class="ghost tiny-btn">刷新</button>
+          </div>
+          <p class="tiny muted" style="margin:0">
+            服主开服：双击 <code>启动联机服.cmd</code>（或 <code>npm run deploy</code>），默认端口 <b>4321</b>。
+            SakuraFrp 把穿透「访问地址」当作服务器地址即可。
+          </p>
         </div>
-        <div id="onlineParty" class="tiny" style="margin-bottom:10px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid var(--line)"></div>
-        <div class="row" style="gap:8px;margin-bottom:8px">
-          <button id="btnPartyCreate" class="primary tiny-btn">创建队伍</button>
-          <button id="btnPartyLeave" class="ghost tiny-btn">离开队伍</button>
+
+        <!-- 直接连接 -->
+        <div id="mpViewDirect" class="mp-view">
+          <p class="tiny muted" style="margin:0 0 10px">输入服务器地址后加入（与 Minecraft「直接连接」相同）。</p>
+          <div class="mp-field">
+            <label for="mpDirectAddr">服务器地址</label>
+            <input id="mpDirectAddr" type="text" placeholder="例如 192.168.1.8:4321 或 xxx.sakurafrp.com:端口" autocomplete="off">
+          </div>
+          <div class="row mp-actions">
+            <button id="btnMpDirectJoin" class="primary tiny-btn">加入服务器</button>
+            <button id="btnMpDirectBack" class="ghost tiny-btn">取消</button>
+          </div>
         </div>
-        <div class="tiny muted" style="margin-bottom:6px">在线旅人（点「邀请」组队）</div>
-        <div id="onlinePeerList" style="max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:6px"></div>
+
+        <!-- 添加 / 编辑服务器 -->
+        <div id="mpViewEdit" class="mp-view">
+          <div class="mp-field">
+            <label for="mpEditName">服务器名称</label>
+            <input id="mpEditName" type="text" placeholder="例如 好友的藏身处" maxlength="32" autocomplete="off">
+          </div>
+          <div class="mp-field">
+            <label for="mpEditAddr">服务器地址</label>
+            <input id="mpEditAddr" type="text" placeholder="主机:端口" autocomplete="off">
+          </div>
+          <div class="row mp-actions">
+            <button id="btnMpEditSave" class="primary tiny-btn">完成</button>
+            <button id="btnMpEditBack" class="ghost tiny-btn">取消</button>
+          </div>
+        </div>
+
+        <!-- 已加入：大厅 / 组队（进服之后） -->
+        <div id="mpViewLobby" class="mp-view">
+          <div id="mpConnectedInfo" class="tiny" style="margin:0 0 10px;padding:8px 10px;border:1px solid var(--line);background:rgba(255,255,255,.04)"></div>
+          <div class="row mp-actions">
+            <button id="btnOnlineDisconnect" class="ghost tiny-btn">断开连接</button>
+            <button id="btnMpBackToList" class="ghost tiny-btn">服务器列表</button>
+          </div>
+          <div id="onlineParty" class="tiny" style="margin-bottom:10px;padding:8px 10px;border:1px solid var(--line);background:rgba(255,255,255,.04)"></div>
+          <div class="row" style="gap:8px;margin-bottom:8px">
+            <button id="btnPartyCreate" class="primary tiny-btn">创建队伍</button>
+            <button id="btnPartyLeave" class="ghost tiny-btn">离开队伍</button>
+          </div>
+          <div class="tiny muted" style="margin-bottom:6px">在线旅人（点「邀请」组队）</div>
+          <div id="onlinePeerList" style="max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:6px"></div>
+        </div>
+
+        <input id="onlineUrl" type="hidden" value="">
+        <button id="btnOnlineConnect" type="button" hidden aria-hidden="true"></button>
       </div>
     </div>
 

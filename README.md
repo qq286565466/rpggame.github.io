@@ -29,12 +29,13 @@ npm run online         # → http://127.0.0.1:4321  页面内点「联机」接�
 
 联机由仓库内 **Node 服务端**（`server/`）提供，零第三方依赖。
 
-1. **服主推荐**：运行 `npm run deploy`（Windows 用 `npm.cmd run deploy` 或双击 `启动联机服.cmd` / `start-online.cmd`）。
-2. **SakuraFrp 远程**：隧道选 TCP、本地 `127.0.0.1:4321`，再  
-   `node server/deploy.mjs --public=http://你的访问地址`  
-   把穿透页面或一键链接发给好友（详见 [server/FRP.md](./server/FRP.md)）。
-3. 浏览器打开页面 → **联机** 接入；组队后队长进本，未组队可单刷。
-4. 仅本机调试可用 `npm run online`。端口映射见 [server/README.md](./server/README.md)。
+玩法类似 **Minecraft 多人**：服主开服 → 好友填 `地址:端口` 加入。
+
+1. **服主**：运行 `npm run deploy`（Windows 可双击 `启动联机服.cmd` / `start-online.cmd`），把终端里的局域网或穿透地址发给好友。
+2. **好友**：打开游戏 → **联机** →「直接连接」或「添加服务器」→ 填 `主机:端口`（默认 `4321`）→ **加入服务器**。
+3. **SakuraFrp**：隧道选 TCP、本地 `127.0.0.1:4321`，再  
+   `node server/deploy.mjs --public=http://你的访问地址`（详见 [server/FRP.md](./server/FRP.md)）。
+4. 组队后队长进本，未组队可单刷。仅本机调试可用 `npm run online`。
 
 ## 藏身处
 

@@ -3,13 +3,22 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.11.5';
+  SP.VERSION = '2.11.6';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.11.6',
+      date: '2026-10-09',
+      title: 'Minecraft 式多人联机',
+      items: [
+        '联机改为服务器列表 + 直接连接 + 添加服务器（类似 Minecraft 多人游戏）',
+        '地址支持主机:端口；可刷新探测在线人数与延迟；列表保存在本机'
+      ]
+    },
     {
       version: '2.11.5',
       date: '2026-10-09',

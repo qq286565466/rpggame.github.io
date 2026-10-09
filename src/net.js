@@ -13,21 +13,81 @@
   }
 
   /**
-   * 规范化联机地址（SakuraFrp / 穿透常用）。
+   * 规范化联机地址（Minecraft 式 host:port / SakuraFrp 穿透常用）。
    * - http→ws、https→wss
+   * - 无端口的 ws:// 默认补 :4321（类似 MC 默认端口习惯）
    * - 自动补 /ws
-   * - 支持只填 host:port
+   * - 支持只填 host、host:port、完整 URL
    */
   function normalizeWsUrl(raw) {
     var u = String(raw == null ? '' : raw).trim();
     if (!u) return defaultWsUrl();
     if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) u = 'ws://' + u;
     u = u.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
-    // 去掉哈希与多余斜杠
+    // 去掉哈希与查询
     u = u.split('#')[0].split('?')[0];
     u = u.replace(/\/+$/, '');
+    try {
+      var parsed = new URL(u);
+      // 纯 ws 且未写端口 → 默认 4321（Minecraft 式「只填 IP」）
+      if (parsed.protocol === 'ws:' && !parsed.port) {
+        parsed.port = '4321';
+        u = parsed.origin + (parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/+$/, ''));
+      }
+    } catch (e) { /* keep u */ }
     if (!/\/ws$/i.test(u)) u += '/ws';
     return u;
+  }
+
+  /** 把地址收成 Minecraft 式「主机:端口」展示（用于服务器列表） */
+  function toServerAddress(raw) {
+    var ws = normalizeWsUrl(raw);
+    try {
+      var p = new URL(ws);
+      var port = p.port || (p.protocol === 'wss:' ? '443' : '4321');
+      return p.hostname + ':' + port;
+    } catch (e) {
+      return String(raw == null ? '' : raw).trim();
+    }
+  }
+
+  /** 由联机地址得到 HTTP 状态探测 URL */
+  function statusHttpUrl(raw) {
+    var ws = normalizeWsUrl(raw);
+    return ws.replace(/^ws:/i, 'http:').replace(/^wss:/i, 'https:').replace(/\/ws$/i, '') + '/api/status';
+  }
+
+  /**
+   * 探测服务器是否在线（类似 MC 多人列表刷新 MOTD / 人数）。
+   * 返回 Promise<{ ok, rtt?, online?, version?, error? }>
+   */
+  function probeServer(raw, timeoutMs) {
+    timeoutMs = timeoutMs || 2500;
+    var url = statusHttpUrl(raw);
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = setTimeout(function () {
+      if (ctrl) try { ctrl.abort(); } catch (e) { /* ignore */ }
+    }, timeoutMs);
+    var t0 = Date.now();
+    var opts = { cache: 'no-store' };
+    if (ctrl) opts.signal = ctrl.signal;
+    return fetch(url, opts).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      return {
+        ok: true,
+        rtt: Date.now() - t0,
+        online: j && j.online != null ? j.online : null,
+        version: j && j.version ? j.version : null,
+        maxPeers: j && j.maxPeers != null ? j.maxPeers : null
+      };
+    }).catch(function (e) {
+      return { ok: false, error: (e && e.name === 'AbortError') ? '超时' : ((e && e.message) || '不可达') };
+    }).then(function (res) {
+      clearTimeout(timer);
+      return res;
+    });
   }
 
   function OnlineClient(opts) {
@@ -112,7 +172,7 @@
       }
     };
     ws.onerror = function () {
-      self.emit('error', { reason: '联机连接失败（请确认已运行 npm run online / node server）' });
+      self.emit('error', { reason: '无法加入服务器（请确认服主已开服，地址与端口正确）' });
     };
   };
 
@@ -303,6 +363,10 @@
 
   OnlineClient.defaultWsUrl = defaultWsUrl;
   OnlineClient.normalizeWsUrl = normalizeWsUrl;
+  OnlineClient.toServerAddress = toServerAddress;
+  OnlineClient.statusHttpUrl = statusHttpUrl;
+  OnlineClient.probeServer = probeServer;
+  OnlineClient.DEFAULT_PORT = 4321;
   OnlineClient.packCharacter = function (ch) {
     ch = ch || {};
     return {

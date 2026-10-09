@@ -23,7 +23,7 @@ import { formatHostCard } from './hostinfo.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
-const VERSION = '2.11.5';
+const VERSION = '2.11.6';
 
 const port = Number(process.env.PORT || process.argv[2] || 4321);
 const host = process.env.HOST || '0.0.0.0';
@@ -73,7 +73,7 @@ function renderHostPage(info) {
   .ok { color: #9dffb0; }
 </style></head><body><main>
   <h1>时空猪 · 服主面板</h1>
-  <p class="lead">HTTP 与联机 WebSocket <strong>共用同一 TCP 端口</strong>。用 SakuraFrp 时请把「访问地址」配进 PUBLIC_URL，并把<strong>穿透后的地址</strong>发给好友。</p>
+  <p class="lead">HTTP 与联机 WebSocket <strong>共用同一 TCP 端口</strong>。联机方式类似 Minecraft：把 <strong>主机:端口</strong> 发给好友，对方在游戏里「直接连接」或「添加服务器」即可。</p>
 
   <section class="card warn">
     <h2>SakuraFrp / 内网穿透（远程好友）</h2>
@@ -87,7 +87,10 @@ function renderHostPage(info) {
     <div class="row" style="margin-top:12px"><span>发给好友的页面</span>
       <code id="publicHttp" class="big">${esc(u.publicHttp)}</code>
       <button type="button" data-copy="publicHttp">复制</button></div>
-    <div class="row"><span>联机栏填入</span>
+    <div class="row"><span>服务器地址（给好友填「直接连接」）</span>
+      <code id="publicAddr" class="big">${esc(String(u.publicHttp || '').replace(/^https?:\/\//i, ''))}</code>
+      <button type="button" data-copy="publicAddr">复制</button></div>
+    <div class="row"><span>联机 WebSocket（高级）</span>
       <code id="publicWs" class="big">${esc(u.publicWs)}</code>
       <button type="button" data-copy="publicWs">复制</button></div>
     <div class="row"><span>一键加入链接</span>

@@ -72,7 +72,7 @@ await test('OnlineClient.packCharacter 压缩角色字段', () => {
   assert.equal(packed.inventory, undefined);
 });
 
-await test('normalizeWsUrl 规范化穿透地址', () => {
+await test('normalizeWsUrl 规范化穿透 / Minecraft 式地址', () => {
   assert.equal(
     SP.OnlineClient.normalizeWsUrl('http://abc.sakurafrp.com:23456'),
     'ws://abc.sakurafrp.com:23456/ws'
@@ -88,6 +88,18 @@ await test('normalizeWsUrl 规范化穿透地址', () => {
   assert.equal(
     SP.OnlineClient.normalizeWsUrl('ws://h:1/ws'),
     'ws://h:1/ws'
+  );
+  assert.equal(
+    SP.OnlineClient.normalizeWsUrl('192.168.1.8'),
+    'ws://192.168.1.8:4321/ws'
+  );
+  assert.equal(
+    SP.OnlineClient.toServerAddress('http://abc.sakurafrp.com:23456/ws'),
+    'abc.sakurafrp.com:23456'
+  );
+  assert.equal(
+    SP.OnlineClient.statusHttpUrl('127.0.0.1:4321'),
+    'http://127.0.0.1:4321/api/status'
   );
 });
 
