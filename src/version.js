@@ -3,13 +3,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.7.1';
+  SP.VERSION = '2.7.2';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.7.2',
+      date: '2026-10-09',
+      title: '场上怪物改用立绘',
+      items: [
+        '副本内怪物本体改为像素立绘精灵（随移动左右翻转）',
+        '立绘抠除黑底；保留影子、精英/首领光环、蓄力预警与血条',
+        '立绘未加载时仍回退到原程序化剪影'
+      ]
+    },
     {
       version: '2.7.1',
       date: '2026-10-09',

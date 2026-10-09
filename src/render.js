@@ -1362,10 +1362,77 @@
   };
 
   /* ---------------------------------------------------------------- 怪物 */
+  /** 立绘未就绪时的程序化剪影（保留作回退，正常游戏走像素立绘） */
+  Renderer.prototype.drawEnemyFallbackBody = function (ctx, e, dying) {
+    var col = e.color;
+    var dark = 'rgba(0,0,0,0.35)';
+    if (e.kind === 'ranged') {
+      var flap = Math.sin(e.anim * 3.2) * 0.6;
+      ctx.fillStyle = 'rgba(186,138,245,0.8)';
+      for (var w = -1; w <= 1; w += 2) {
+        ctx.save();
+        ctx.rotate(w * (0.34 + flap));
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(w * 19, -19, w * 35, -7);
+        ctx.quadraticCurveTo(w * 27, 4, w * 31, 15);
+        ctx.quadraticCurveTo(w * 19, 9, w * 9, 13);
+        ctx.quadraticCurveTo(w * 4, 7, 0, 6);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+      var bg2 = ctx.createRadialGradient(-3, -3, 1, 0, 0, e.r);
+      bg2.addColorStop(0, '#e0c6ff'); bg2.addColorStop(1, col);
+      ctx.fillStyle = bg2;
+      ctx.beginPath(); ctx.arc(0, 0, e.r, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#3a1a4d';
+      ctx.beginPath(); ctx.arc(-4, -2, 1.8, 0, TAU); ctx.arc(4, -2, 1.8, 0, TAU); ctx.fill();
+      return;
+    }
+    var isCharger = e.kind === 'charger';
+    var fam = e.family || 'beast';
+    if (fam === 'fungus') { this.drawFungusBody(ctx, e, isCharger); }
+    else if (fam === 'crystal') { this.drawCrystalBody(ctx, e, isCharger); }
+    else if (fam === 'demon') { this.drawDemonBody(ctx, e, isCharger); }
+    else {
+      var bob = Math.sin(e.anim) * 1.4;
+      ctx.save();
+      ctx.translate(0, bob);
+      ctx.fillStyle = isCharger ? '#3b2519' : '#4b3423';
+      var lg = [[-e.r * 0.55, e.r * 0.5], [e.r * 0.55, e.r * 0.5], [-e.r * 0.55, -e.r * 0.3], [e.r * 0.55, -e.r * 0.3]];
+      for (var li = 0; li < lg.length; li++) {
+        roundRect(ctx, lg[li][0] - 3.5, lg[li][1] - 4, 7, 12, 3.5); ctx.fill();
+      }
+      var ebg = ctx.createRadialGradient(-e.r * 0.3, -e.r * 0.4, 2, 0, 0, e.r * 1.3);
+      ebg.addColorStop(0, isCharger ? '#c07a4c' : '#c69a6e');
+      ebg.addColorStop(0.5, col);
+      ebg.addColorStop(1, isCharger ? '#33200f' : '#4a3020');
+      ctx.fillStyle = ebg;
+      ellipse(ctx, 0, 0, e.r, e.r * 0.82); ctx.fill();
+      ctx.strokeStyle = dark; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = isCharger ? '#a3653c' : '#8a5c3a';
+      ellipse(ctx, 0, -e.r * 0.85, e.r * 0.62, e.r * 0.5); ctx.fill();
+      ctx.fillStyle = e.kind === 'boss' ? '#ff5b3a' : '#2a1a10';
+      ctx.beginPath();
+      ctx.arc(-e.r * 0.24, -e.r * 0.95, e.r * 0.11, 0, TAU);
+      ctx.arc(e.r * 0.24, -e.r * 0.95, e.r * 0.11, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    if (e.kind === 'boss') {
+      ctx.globalAlpha = 0.35 + 0.2 * Math.sin(this.t * 3);
+      ctx.strokeStyle = '#ff7a3a'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, e.r * 1.35, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = dying;
+    }
+  };
+
   Renderer.prototype.drawEnemy = function (ctx, e, x, y, world, S) {
     var spawn = e.spawnT > 0 ? clamp(1 - e.spawnT / 0.45, 0.15, 1) : 1;
     var dying = e.dying > 0 ? clamp(e.dying / 0.28, 0, 1) : 1;
     var flash = e.hitFlash > 0;
+    var bob = Math.sin(e.anim) * (e.kind === 'ranged' ? 2.2 : 1.4);
+    var faceLeft = (e.vx || 0) < -8 || (Math.abs(e.vx || 0) < 8 && world && world.player && e.x > world.player.x);
 
     ctx.save();
     ctx.translate(x, y);
@@ -1412,140 +1479,32 @@
     ctx.scale(spawn * (0.6 + 0.4 * dying), spawn * (0.6 + 0.4 * dying));
     ctx.globalAlpha = dying;
 
-    var col = e.color;
-    var dark = 'rgba(0,0,0,0.35)';
-
-    if (e.kind === 'ranged') {
-      // 孢子蝠：翅膀 + 球体
-      var flap = Math.sin(e.anim * 3.2) * 0.6;
-      ctx.fillStyle = 'rgba(186,138,245,0.8)';
-      for (var w = -1; w <= 1; w += 2) {
-        ctx.save();
-        ctx.rotate(w * (0.34 + flap));
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.quadraticCurveTo(w * 19, -19, w * 35, -7);
-        ctx.quadraticCurveTo(w * 27, 4, w * 31, 15);
-        ctx.quadraticCurveTo(w * 19, 9, w * 9, 13);
-        ctx.quadraticCurveTo(w * 4, 7, 0, 6);
-        ctx.closePath(); ctx.fill();
-        ctx.strokeStyle = 'rgba(230,205,255,0.35)'; ctx.lineWidth = 1; ctx.stroke();
-        ctx.restore();
-      }
-      var bg2 = ctx.createRadialGradient(-3, -3, 1, 0, 0, e.r);
-      bg2.addColorStop(0, '#e0c6ff'); bg2.addColorStop(1, col);
-      ctx.fillStyle = bg2;
-      ctx.beginPath(); ctx.arc(0, 0, e.r, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#3a1a4d';
-      ctx.beginPath(); ctx.arc(-4, -2, 1.8, 0, TAU); ctx.arc(4, -2, 1.8, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(-4.6, -2.8, 0.7, 0, TAU); ctx.arc(3.4, -2.8, 0.7, 0, TAU); ctx.fill();
-    } else {
-      var isCharger = e.kind === 'charger';
-      var fam = e.family || 'beast';
-      if (fam === 'fungus') { this.drawFungusBody(ctx, e, isCharger); }
-      else if (fam === 'crystal') { this.drawCrystalBody(ctx, e, isCharger); }
-      else if (fam === 'demon') { this.drawDemonBody(ctx, e, isCharger); }
-      else {
-      // 科多兽：四足 + 头 + 角（冲锋种带背刺与头甲，剪影更凶）
-      var bob = Math.sin(e.anim) * 1.4;
-      ctx.save();
-      ctx.translate(0, bob);
-      // 腿
-      ctx.fillStyle = isCharger ? '#3b2519' : '#4b3423';
-      var lg = [[-e.r * 0.55, e.r * 0.5], [e.r * 0.55, e.r * 0.5], [-e.r * 0.55, -e.r * 0.3], [e.r * 0.55, -e.r * 0.3]];
-      for (var li = 0; li < lg.length; li++) {
-        roundRect(ctx, lg[li][0] - 3.5, lg[li][1] - 4, 7, 12, 3.5); ctx.fill();
-      }
-      // 身体
-      var ebg = ctx.createRadialGradient(-e.r * 0.3, -e.r * 0.4, 2, 0, 0, e.r * 1.3);
-      if (isCharger) {
-        ebg.addColorStop(0, '#c07a4c');
-        ebg.addColorStop(0.5, col);
-        ebg.addColorStop(1, '#33200f');
-      } else {
-        ebg.addColorStop(0, '#c69a6e');
-        ebg.addColorStop(0.5, col);
-        ebg.addColorStop(1, '#4a3020');
-      }
-      ctx.fillStyle = ebg;
-      ellipse(ctx, 0, 0, e.r, e.r * 0.82); ctx.fill();
-      ctx.strokeStyle = dark; ctx.lineWidth = 2; ctx.stroke();
-      // 背部甲片 / 背刺
-      if (isCharger) {
-        ctx.fillStyle = '#efe0c8';
-        for (var cs = -1; cs <= 1; cs++) {
-          ctx.beginPath();
-          ctx.moveTo(cs * e.r * 0.42 - 4.5, -e.r * 0.44);
-          ctx.lineTo(cs * e.r * 0.42, -e.r * 1.24);
-          ctx.lineTo(cs * e.r * 0.42 + 4.5, -e.r * 0.44);
-          ctx.closePath(); ctx.fill();
-        }
-      } else {
-        ctx.fillStyle = 'rgba(60,40,26,0.55)';
-        for (var sp2 = -1; sp2 <= 1; sp2++) {
-          ctx.beginPath();
-          ctx.moveTo(sp2 * e.r * 0.42 - 5, -e.r * 0.5);
-          ctx.lineTo(sp2 * e.r * 0.42, -e.r * 0.95);
-          ctx.lineTo(sp2 * e.r * 0.42 + 5, -e.r * 0.5);
-          ctx.closePath(); ctx.fill();
-        }
-      }
-      // 头
-      ctx.fillStyle = isCharger ? '#a3653c' : '#8a5c3a';
-      ellipse(ctx, 0, -e.r * 0.85, e.r * 0.62, e.r * 0.5); ctx.fill();
-      ctx.strokeStyle = dark; ctx.stroke();
-      if (isCharger) {
-        // 头甲
-        ctx.fillStyle = 'rgba(238,224,200,0.9)';
-        ctx.beginPath();
-        ctx.moveTo(-e.r * 0.5, -e.r * 1.0);
-        ctx.lineTo(0, -e.r * 1.34);
-        ctx.lineTo(e.r * 0.5, -e.r * 1.0);
-        ctx.lineTo(0, -e.r * 0.86);
-        ctx.closePath(); ctx.fill();
-      }
-      // 角
-      ctx.strokeStyle = '#efe0c8'; ctx.lineWidth = isCharger ? 4 : 3.4; ctx.lineCap = 'round';
-      for (var hs = -1; hs <= 1; hs += 2) {
-        ctx.beginPath();
-        ctx.moveTo(hs * e.r * 0.38, -e.r * 1.05);
-        ctx.quadraticCurveTo(hs * e.r * 0.9, -e.r * 1.5, hs * e.r * 0.62, -e.r * 1.85);
-        ctx.stroke();
-      }
-      // 眼睛（冲锋蓄力 / 冲刺时发红）
-      var hot = isCharger && (e.state === 'wind' || e.state === 'dash');
-      ctx.fillStyle = e.kind === 'boss' ? '#ff5b3a' : (hot ? '#ff3a2a' : '#2a1a10');
-      if (hot) {
-        ctx.globalAlpha = 0.55 + 0.45 * Math.sin(this.t * 26);
-        ellipse(ctx, 0, -e.r * 0.95, e.r * 0.9, e.r * 0.5); ctx.fill();
-        ctx.globalAlpha = dying;
-      }
-      ctx.beginPath();
-      ctx.arc(-e.r * 0.24, -e.r * 0.95, e.r * 0.11, 0, TAU);
-      ctx.arc(e.r * 0.24, -e.r * 0.95, e.r * 0.11, 0, TAU);
-      ctx.fill();
-      ctx.restore();
-      }
-
-      if (e.kind === 'boss') {
-        // 首领光环
-        ctx.globalAlpha = 0.35 + 0.2 * Math.sin(this.t * 3);
+    // 优先用像素立绘作为场上本体；图未就绪时回退程序化剪影
+    var spriteSz = Math.round(e.r * (e.boss ? 2.55 : 2.7));
+    var usedPortrait = false;
+    ctx.save();
+    ctx.translate(0, bob - e.r * 0.08);
+    if (faceLeft) ctx.scale(-1, 1);
+    if (this.drawMobIcon(ctx, e.key, 0, 0, spriteSz)) {
+      usedPortrait = true;
+      if (e.boss) {
+        ctx.globalAlpha = (0.35 + 0.2 * Math.sin(this.t * 3)) * dying;
         ctx.strokeStyle = '#ff7a3a'; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(0, 0, e.r * 1.35, 0, TAU); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, e.r * 1.28, 0, TAU); ctx.stroke();
         ctx.globalAlpha = dying;
-        // 王冠（画在双角之上，带描边以免被角盖住）
-        ctx.fillStyle = '#ffcf5e';
-        ctx.strokeStyle = 'rgba(90,50,0,0.85)';
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.moveTo(-19, -e.r * 1.9);
-        ctx.lineTo(-12, -e.r * 2.34);
-        ctx.lineTo(0, -e.r * 2.02);
-        ctx.lineTo(12, -e.r * 2.34);
-        ctx.lineTo(19, -e.r * 1.9);
-        ctx.closePath(); ctx.fill(); ctx.stroke();
       }
+      // 冲锋蓄力时立绘边缘发红
+      if (e.kind === 'charger' && (e.state === 'wind' || e.state === 'dash')) {
+        ctx.globalAlpha = (0.35 + 0.35 * Math.sin(this.t * 26)) * dying;
+        ctx.strokeStyle = '#ff3a2a'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(0, 0, e.r * 1.15, 0, TAU); ctx.stroke();
+        ctx.globalAlpha = dying;
+      }
+    }
+    ctx.restore();
+
+    if (!usedPortrait) {
+      this.drawEnemyFallbackBody(ctx, e, dying);
     }
 
     // 受击高亮：用「亮边 + 轻填充」而不是整块白，避免多只怪同时被震击命中时糊成一片白团
@@ -1553,10 +1512,10 @@
       var fa = clamp(e.hitFlash / 0.16, 0, 1);
       ctx.globalAlpha = fa * 0.42;
       ctx.fillStyle = '#fff';
-      ellipse(ctx, 0, 0, e.r * 0.94, e.r * 0.86); ctx.fill();
+      ellipse(ctx, 0, bob, e.r * 0.94, e.r * 0.86); ctx.fill();
       ctx.globalAlpha = fa * 0.85;
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
-      ellipse(ctx, 0, 0, e.r * 1.02, e.r * 0.94); ctx.stroke();
+      ellipse(ctx, 0, bob, e.r * 1.02, e.r * 0.94); ctx.stroke();
       ctx.globalAlpha = dying;
     }
     // 眩晕星
@@ -1571,21 +1530,10 @@
     }
     ctx.restore();
 
-    // 首领立绘（血条上方）
-    if (e.boss && e.dying <= 0) {
-      var psz = Math.round(Math.min(34, e.r * 1.05));
-      var ppy = y - e.r - 52;
-      if (this.drawMobIcon(ctx, e.key, x, ppy, psz)) {
-        ctx.strokeStyle = 'rgba(255, 140, 80, 0.75)';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(x, ppy, psz * 0.56, 0, TAU); ctx.stroke();
-      }
-    }
-
     // 血条
     if (e.dying <= 0 && (e.hp < e.maxHp || e.boss)) {
       var bw = Math.max(30, e.r * 2.2), bh = e.boss ? 6 : 4.4;
-      var bx = x - bw / 2, by = y - e.r - (e.boss ? 30 : 16);
+      var bx = x - bw / 2, by = y - e.r - (e.boss ? 22 : 16);
       ctx.fillStyle = 'rgba(0,0,0,0.65)';
       roundRect(ctx, bx - 1, by - 1, bw + 2, bh + 2, 3); ctx.fill();
       var ratio = clamp(e.hp / e.maxHp, 0, 1);
