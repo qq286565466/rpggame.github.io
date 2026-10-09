@@ -4831,7 +4831,11 @@
 
     ctx.save();
     ctx.translate(sp.x, sp.y);
-    // 护盾
+    ctx.translate(0, walkBob);
+    this.charIdlePose(ctx, this.t, 0.4, idleEnergy);
+    // 绕脚底转向鼠标 / 攻击方向（贴图默认朝 -y）
+    ctx.rotate(p.facing + Math.PI / 2);
+    // 护盾、赐福绕身体中心
     if (p.shield > 0) {
       ctx.save();
       var sg = ctx.createRadialGradient(0, -foot, 16, 0, -foot, 34);
@@ -4850,18 +4854,13 @@
       }
       ctx.restore();
     }
-    // 赐福增伤光环
     if (p.dmgBuffT > 0) {
       ctx.globalAlpha = 0.35 + 0.2 * Math.sin(this.t * 8);
       ctx.strokeStyle = '#ffe9a8'; ctx.lineWidth = 2.5;
       ctx.beginPath(); ctx.arc(0, -foot, 26, 0, TAU); ctx.stroke();
       ctx.globalAlpha = 1;
     }
-    ctx.translate(0, walkBob);
-    this.charIdlePose(ctx, this.t, 0.4, idleEnergy);
-    // 立绘正立、脚踩坐标点；程序化小猪仍绕原点朝向旋转
     if (!this.drawCharIcon(ctx, 'hero', 0, -foot, heroSz)) {
-      ctx.rotate(p.facing + Math.PI / 2);
       this.drawPigBody(ctx, p, world, 1);
     } else if (p.hurtFlash > 0) {
       ctx.globalAlpha = clamp(p.hurtFlash / 0.3, 0, 1) * 0.55;
@@ -5374,9 +5373,9 @@
     ctx.translate(pl.x, pl.y);
     ctx.translate(0, hubWalkBob);
     this.charIdlePose(ctx, t, 0.4, hubIdleE);
-    // 立绘正立、脚踩坐标点；回退程序化小猪时再朝面向旋转
+    // 藏身处也绕脚底朝向移动方向
+    ctx.rotate(h.player.facing + Math.PI / 2);
     if (!this.drawCharIcon(ctx, 'hero', 0, -hubFoot, hubHeroSz)) {
-      ctx.rotate(h.player.facing + Math.PI / 2);
       SP.Renderer.prototype.drawPigBody.call(this, ctx, {
         walkPhase: h.player.walkPhase, vx: h.player.vx, vy: h.player.vy, hurtFlash: 0
       }, null, 1);
