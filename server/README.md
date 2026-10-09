@@ -13,8 +13,24 @@
 
 ## 启动
 
+### 服主一键部署（推荐）
+
 ```bash
-# 仓库根目录
+npm run deploy
+# 或
+npm run host
+```
+
+会自动：
+
+1. 探测局域网 IP / 公网 IP  
+2. **打印必须映射的端口与内部 IP**（TCP，默认 `4321`）  
+3. 写出 `host-card.txt`  
+4. 启动联机服务，并提供服主面板 `http://127.0.0.1:4321/host`
+
+### 仅启动服务（不探测）
+
+```bash
 npm run online
 # 或
 node server/index.mjs 4321
@@ -33,6 +49,20 @@ PORT=4321 HOST=0.0.0.0 MAX_PEERS=64 node server/index.mjs
 | `GET /api/status` | 在线人数、房间、版本、uptime |
 | `GET /api/online` | 同 status（兼容旧客户端） |
 | `GET /api/rooms` | 当前队伍列表 |
+| `GET /api/host` | 服主部署信息（需先 `npm run deploy`） |
+| `GET /host` | 服主面板：端口映射提醒与可复制地址 |
+| `GET /host-card.txt` | 纯文本服主卡片 |
+
+## 端口映射（服主必看）
+
+| 项 | 值 |
+| --- | --- |
+| 协议 | **TCP** |
+| 外部端口 | 与 `PORT` 相同（默认 **4321**） |
+| 内部 IP | 运行 `deploy` 时打印的局域网 IP |
+| 内部端口 | 同外部端口 |
+
+HTTP 页面与 WebSocket `/ws` **共用该端口**，路由器只需做一条转发。
 
 ## WebSocket ` /ws `
 
