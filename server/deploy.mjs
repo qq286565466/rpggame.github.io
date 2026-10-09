@@ -78,10 +78,21 @@ async function main() {
   console.log('已写入服主卡片: ' + cardPath);
   console.log('正在启动联机服务端…\n');
 
-  await import(pathToFileURL(path.join(__dirname, 'index.mjs')).href);
+  const mod = await import(pathToFileURL(path.join(__dirname, 'index.mjs')).href);
+  try {
+    await mod.ready;
+  } catch (err) {
+    // index.mjs already prints EADDRINUSE tips; ensure non-zero exit for .cmd
+    process.exitCode = 1;
+    throw err;
+  }
+  // Keep process alive while HTTP server runs (event loop held by listen).
 }
 
 main().catch((err) => {
-  console.error('部署失败:', err && err.message ? err.message : err);
+  const msg = err && err.message ? err.message : String(err);
+  if (!(err && err.code === 'EADDRINUSE')) {
+    console.error('部署失败:', msg);
+  }
   process.exit(1);
 });

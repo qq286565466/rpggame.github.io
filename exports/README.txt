@@ -18,7 +18,8 @@
 【Windows PowerShell 报「禁止运行脚本」】
 这是系统拦截了 npm.ps1，不是游戏坏了。任选其一：
 
-   1) 双击仓库根目录「启动联机服.cmd」
+   1) 双击仓库根目录「启动联机服.cmd」（或 start-online.cmd）
+      窗口会保持打开；端口占用时会显示错误而不是闪退
    2) npm.cmd run deploy
    3) node server\deploy.mjs 4321
    4) 可选：Set-ExecutionPolicy -Scope CurrentUser RemoteSigned

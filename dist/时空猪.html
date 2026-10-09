@@ -1402,13 +1402,22 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.11.4';
+  SP.VERSION = '2.11.5';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.11.5',
+      date: '2026-10-09',
+      title: 'Windows 联机服启动闪退修复',
+      items: [
+        '启动联机服.cmd 改为 CRLF，并用粘滞控制台避免双击闪退',
+        '端口占用时中文提示；新增 start-online.cmd / 启用联机服.cmd 别名'
+      ]
+    },
     {
       version: '2.11.4',
       date: '2026-10-09',
