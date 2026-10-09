@@ -539,6 +539,95 @@ test('重锤砸击能波及扇形外的近身敌人', () => {
   assert.ok(side.hp < hp0, '砸击震波应打到侧方近身敌人');
 });
 
+function withUnique(w, key) {
+  w.player.uniques = [key];
+  w.hasUnique = function (k) { return w.player.uniques.indexOf(k) >= 0; };
+}
+
+test('传说武器·连星：远程普攻额外射出两发侧弹', () => {
+  const w = makeWorld({ seed: 31 });
+  w.enemies.length = 0;
+  applyWeapon(w, 'bow');
+  withUnique(w, 'multishot');
+  w.player.atkCd = 0;
+  w.tryAttack(0);
+  assert.equal(w.projectiles.length, 3, '连星应共发射 3 支箭');
+  const scales = w.projectiles.map((p) => Math.round(p.dmg));
+  assert.ok(scales[0] > scales[1], '主弹伤害应高于侧弹');
+});
+
+test('传说武器·猎杀：残血敌人受到额外伤害', () => {
+  const w = makeWorld({ seed: 32 });
+  w.enemies.length = 0;
+  applyWeapon(w, 'sword');
+  withUnique(w, 'execute');
+  const e = w.spawnEnemy('calf');
+  e.x = w.player.x + 40; e.y = w.player.y; e.spawnT = 0;
+  e.hp = e.maxHp = 1000;
+  e.hp = 200; // 20% 血
+  w.player.crit = 0; w.player.damage = 100; w.player.atkCd = 0;
+  w.player.dmgBuffT = 0; w.player.weapon.dmgMul = 1;
+  const hp0 = e.hp;
+  w.hitEnemyWithAttack(e, 0, { dmgScale: 1, noProc: true });
+  const dealtLow = hp0 - e.hp;
+  e.hp = 800; // 80% 血
+  const hp1 = e.hp;
+  w.hitEnemyWithAttack(e, 0, { dmgScale: 1, noProc: true });
+  const dealtHigh = hp1 - e.hp;
+  assert.ok(dealtLow > dealtHigh * 1.5, '残血增伤应显著: ' + dealtLow + ' vs ' + dealtHigh);
+});
+
+test('传说武器·裂空：命中溅射周围敌人', () => {
+  const w = makeWorld({ seed: 33 });
+  w.enemies.length = 0;
+  applyWeapon(w, 'sword');
+  withUnique(w, 'rift');
+  const a = w.spawnEnemy('calf'); a.x = w.player.x + 40; a.y = w.player.y; a.spawnT = 0; a.hp = a.maxHp = 1e9;
+  const b = w.spawnEnemy('calf'); b.x = a.x + 40; b.y = a.y; b.spawnT = 0; b.hp = b.maxHp = 1e9;
+  w.player.crit = 0; w.player.damage = 80; w.player.atkCd = 0;
+  const b0 = b.hp;
+  w.hitEnemyWithAttack(a, 0, { dmgScale: 1 });
+  assert.ok(b.hp < b0, '裂空应对邻近敌人造成溅射');
+});
+
+test('传说武器·渴血：击杀回复生命', () => {
+  const w = makeWorld({ seed: 34 });
+  w.enemies.length = 0;
+  withUnique(w, 'bloodthirst');
+  w.player.hp = w.player.maxHp * 0.5;
+  const before = w.player.hp;
+  const e = w.spawnEnemy('calf'); e.x = w.player.x + 30; e.y = w.player.y; e.spawnT = 0; e.hp = 1;
+  w.damageEnemy(e, 999, {});
+  assert.ok(w.player.hp > before, '渴血应在击杀后回血');
+  assert.ok(Math.abs(w.player.hp - (before + w.player.maxHp * 0.05)) < 1.5, '回血约为最大生命 5%');
+});
+
+test('传说武器·超载：提升技能伤害并缩短震击冷却', () => {
+  const base = SP.deriveCharacter(makeCharacter());
+  const oc = SP.deriveCharacter(Object.assign(makeCharacter(), {
+    equipped: {
+      weapon: {
+        slot: 'weapon', rarity: 'legendary', ilvl: 20, stats: {}, affixes: [], upgrade: 0,
+        unique: 'overcharge', base: 'staff'
+      }
+    }
+  }));
+  assert.ok(oc.skillDmg >= base.skillDmg + 0.3 - 1e-9, '超载应 +30% 技能伤害');
+  const w = makeWorld({
+    seed: 35,
+    character: Object.assign(makeCharacter(), {
+      equipped: {
+        weapon: {
+          slot: 'weapon', rarity: 'legendary', ilvl: 20, stats: { atk: 10 }, affixes: [], upgrade: 0,
+          unique: 'overcharge', base: 'staff'
+        }
+      }
+    })
+  });
+  w.castQuake();
+  assert.ok(w.player.quakeCd < 8 * 0.9, '超载应缩短震击冷却: ' + w.player.quakeCd);
+});
+
 console.log('\n时空猪 · 战斗与副本逻辑测试\n' + out.join('\n'));
 console.log(`\n通过 ${pass} / ${pass + fail}` + (fail ? `  ✗ 失败 ${fail}` : '  ✓ 全部通过'));
 process.exit(fail ? 1 : 0);

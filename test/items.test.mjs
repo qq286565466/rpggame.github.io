@@ -302,6 +302,31 @@ test('随机武器会落到新型号上，且保留 base 字段', () => {
   }
 });
 
+test('传说武器可抽到武器专属独特，防具不会', () => {
+  const weaponOnly = I.UNIQUES.filter((u) => u.slots && u.slots.indexOf('weapon') >= 0).map((u) => u.key);
+  assert.ok(weaponOnly.length >= 6, '应至少有 6 个武器专属传说');
+  assert.deepEqual(
+    I.uniquesForSlot('helm').map((u) => u.key).filter((k) => weaponOnly.indexOf(k) >= 0),
+    [],
+    '头盔池不应包含武器专属'
+  );
+  const wKeys = I.uniquesForSlot('weapon').map((u) => u.key);
+  for (const k of weaponOnly) assert.ok(wKeys.indexOf(k) >= 0, '武器池应含 ' + k);
+
+  const rng = SP.makeRng(21);
+  let sawWeaponOnly = false;
+  for (let i = 0; i < 80; i++) {
+    const key = I.pickUnique(rng, 'weapon');
+    if (weaponOnly.indexOf(key) >= 0) sawWeaponOnly = true;
+  }
+  assert.ok(sawWeaponOnly, '武器传说抽样应出现武器专属效果');
+
+  for (let i = 0; i < 200; i++) {
+    const key = I.pickUnique(rng, 'armor');
+    assert.ok(weaponOnly.indexOf(key) < 0, '防具传说不应抽到武器专属: ' + key);
+  }
+});
+
 console.log('\n时空猪 · 装备系统测试\n' + out.join('\n'));
 console.log(`\n通过 ${pass} / ${pass + fail}` + (fail ? `  ✗ 失败 ${fail}` : '  ✓ 全部通过'));
 process.exit(fail ? 1 : 0);

@@ -185,17 +185,40 @@
     ]
   };
 
-  /* --------------------------------------------------- 传说独特效果（由 sim 生效） */
+  /* --------------------------------------------------- 传说独特效果（由 sim 生效）
+   * slots 缺省 = 任意部位；写了则仅该部位传说可 roll 到（用于传说武器专属效果） */
   var UNIQUES = [
     { key: 'vampiric', name: '噬魂', desc: '吸血效果翻倍' },
     { key: 'berserk', name: '狂怒', desc: '生命低于 40% 时攻击力 +40%' },
     { key: 'greedheart', name: '贪婪之心', desc: '金币收益与掉落幸运 +25%' },
     { key: 'hunter', name: '秘宝猎人', desc: '精英怪额外掉落一件装备' },
     { key: 'echo', name: '时空回响', desc: '击杀时有 12% 概率触发一次小型震击' },
-    { key: 'swift', name: '疾风', desc: '移动速度 +12%，冲刺冷却减半' }
+    { key: 'swift', name: '疾风', desc: '移动速度 +12%，冲刺冷却减半' },
+    /* —— 传说武器专属 —— */
+    { key: 'multishot', name: '连星', desc: '远程普攻额外射出两发侧弹（55% 伤害）', slots: ['weapon'] },
+    { key: 'rift', name: '裂空', desc: '命中时对周围敌人溅射 40% 伤害', slots: ['weapon'] },
+    { key: 'execute', name: '猎杀', desc: '对生命低于 30% 的敌人伤害 +75%', slots: ['weapon'] },
+    { key: 'starchain', name: '星链', desc: '普攻命中时 35% 连锁打击最近另一敌人', slots: ['weapon'] },
+    { key: 'overcharge', name: '超载', desc: '技能伤害 +30%，震击冷却缩短 25%', slots: ['weapon'] },
+    { key: 'bloodthirst', name: '渴血', desc: '击杀回复 5% 最大生命', slots: ['weapon'] }
   ];
   var UNIQUE_BY_KEY = {};
   UNIQUES.forEach(function (u) { UNIQUE_BY_KEY[u.key] = u; });
+
+  /** 某部位可 roll 到的传说独特池；无匹配时退回全表 */
+  function uniquesForSlot(slot) {
+    var pool = [];
+    for (var i = 0; i < UNIQUES.length; i++) {
+      var u = UNIQUES[i];
+      if (!u.slots || (slot && u.slots.indexOf(slot) >= 0)) pool.push(u);
+    }
+    return pool.length ? pool : UNIQUES.slice();
+  }
+
+  function pickUnique(rng, slot) {
+    var pool = uniquesForSlot(slot);
+    return pool[Math.floor(rng() * pool.length)].key;
+  }
 
   /* --------------------------------------------------------------- 工具 */
   /** 只要数值部分（带正负号与单位），界面里和属性名分列显示时用 */
@@ -282,10 +305,10 @@
       stats[af.key] = (stats[af.key] || 0) + value;
     }
 
-    // 传说附带独特效果
+    // 传说附带独特效果（武器部位可抽到武器专属传说）
     var unique = null;
     if (rarity.key === 'legendary') {
-      unique = UNIQUES[Math.floor(rng() * UNIQUES.length)].key;
+      unique = pickUnique(rng, slot);
     }
 
     // 生成名字：取数值最高的词条做前缀 / 后缀
@@ -441,6 +464,8 @@
     WEAPON_PROFILES: WEAPON_PROFILES,
     UNIQUES: UNIQUES,
     UNIQUE_BY_KEY: UNIQUE_BY_KEY,
+    uniquesForSlot: uniquesForSlot,
+    pickUnique: pickUnique,
     UPGRADE_CAP: UPGRADE_CAP,
     fmt: fmt,
     fmtValue: fmtValue,
