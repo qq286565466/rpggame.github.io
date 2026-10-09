@@ -390,6 +390,14 @@ test('怪物立绘：每种敌人都有 mob-<key> 图标', () => {
   assert.equal(SP.ItemIcons.enemyUrl('not-a-mob'), null);
 });
 
+test('角色立绘：主角 / 铁匠 / 商人图标齐全', () => {
+  assert.ok(SP.ItemIcons);
+  ['char-hero', 'char-blacksmith', 'char-merchant'].forEach((key) => {
+    const url = SP.ItemIcons.url(key);
+    assert.ok(url && url.indexOf('data:image/png') === 0, '缺少角色立绘：' + key);
+  });
+});
+
 test('装备图鉴：入账解锁型号与传说，normalize 回填旧档', () => {
   const ch = P.newCharacter('装备图鉴');
   assert.deepEqual(P.gearCodexProgress(ch), { found: 0, total: I.allBases().length });

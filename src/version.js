@@ -3,13 +3,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.7.2';
+  SP.VERSION = '2.8.0';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.8.0',
+      date: '2026-10-09',
+      title: '主角与 NPC 立绘',
+      items: [
+        '主角改为与原先粉猪同风格的卡通立绘，藏身处与副本共用',
+        '铁匠 · 格罗姆、商人 · 皮皮改为同风格粉猪形象（围裙锤 / 帽与钱袋）',
+        '立绘未加载时回退到原程序化绘制'
+      ]
+    },
     {
       version: '2.7.2',
       date: '2026-10-09',

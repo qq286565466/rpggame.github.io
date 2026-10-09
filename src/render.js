@@ -547,6 +547,7 @@
     var p = world.player;
     var sp = S(p.x, p.y);
     var dead = world.dead;
+    var bob = Math.sin((p.walkPhase || 0)) * (SP.len(p.vx, p.vy) > 12 ? 1.2 : 0.5);
 
     // 影子
     ctx.globalAlpha = 0.4;
@@ -559,7 +560,7 @@
       ctx.translate(sp.x, sp.y);
       ctx.rotate(Math.PI / 2 * 0.9);
       ctx.globalAlpha = 0.75;
-      this.drawPigBody(ctx, p, world, 0);
+      if (!this.drawCharIcon(ctx, 'hero', 0, 0, 44)) this.drawPigBody(ctx, p, world, 0);
       ctx.restore();
       ctx.globalAlpha = 1;
       return;
@@ -597,7 +598,14 @@
       ctx.globalAlpha = 1;
     }
     ctx.rotate(p.facing + Math.PI / 2); // 贴图朝上，旋转到 facing
-    this.drawPigBody(ctx, p, world, 1);
+    ctx.translate(0, bob);
+    if (!this.drawCharIcon(ctx, 'hero', 0, -2, 46)) this.drawPigBody(ctx, p, world, 1);
+    else if (p.hurtFlash > 0) {
+      ctx.globalAlpha = clamp(p.hurtFlash / 0.3, 0, 1) * 0.55;
+      ctx.fillStyle = '#fff';
+      ellipse(ctx, 0, -2, 18, 16); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     ctx.restore();
     ctx.globalAlpha = 1;
   };
@@ -680,11 +688,11 @@
   };
 
   /** 掉落物上的像素图标。图还没解码完时返回 false，调用方再画简易形状。 */
-  Renderer.prototype.drawItemIcon = function (ctx, key, x, y, sz) {
+  Renderer.prototype.drawItemIcon = function (ctx, key, x, y, sz, smoothOn) {
     var img = SP.ItemIcons && SP.ItemIcons.image(key);
     if (!img || !img.complete || !img.naturalWidth) return false;
     var smooth = ctx.imageSmoothingEnabled;
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = !!smoothOn;
     ctx.drawImage(img, Math.round(x - sz / 2), Math.round(y - sz / 2), sz, sz);
     ctx.imageSmoothingEnabled = smooth;
     return true;
@@ -695,7 +703,12 @@
     var icons = SP.ItemIcons;
     if (!icons || !icons.forEnemy) return false;
     var key = icons.forEnemy(enemyKey);
-    return key ? this.drawItemIcon(ctx, key, x, y, sz) : false;
+    return key ? this.drawItemIcon(ctx, key, x, y, sz, false) : false;
+  };
+
+  /** 角色立绘：主角 / 铁匠 / 商人（柔和卡通，开平滑） */
+  Renderer.prototype.drawCharIcon = function (ctx, charKey, x, y, sz) {
+    return this.drawItemIcon(ctx, 'char-' + charKey, x, y, sz, true);
   };
 
   /** 掉落物上标注部位的汉字（比 emoji 更可靠，不依赖字体回退） */
@@ -1049,7 +1062,7 @@
       this.drawNpc(ctx, npc, np.x, np.y, isNear, t);
     }
 
-    /* 玩家（复用战斗里的那只猪） */
+    /* 玩家（与战斗共用角色立绘） */
     var pl = S(h.player.x, h.player.y);
     ctx.globalAlpha = 0.4;
     ctx.fillStyle = '#000';
@@ -1058,9 +1071,11 @@
     ctx.save();
     ctx.translate(pl.x, pl.y);
     ctx.rotate(h.player.facing + Math.PI / 2);
-    SP.Renderer.prototype.drawPigBody.call(this, ctx, {
-      walkPhase: h.player.walkPhase, vx: h.player.vx, vy: h.player.vy, hurtFlash: 0
-    }, null, 1);
+    if (!this.drawCharIcon(ctx, 'hero', 0, -2, 46)) {
+      SP.Renderer.prototype.drawPigBody.call(this, ctx, {
+        walkPhase: h.player.walkPhase, vx: h.player.vx, vy: h.player.vy, hurtFlash: 0
+      }, null, 1);
+    }
     ctx.restore();
 
     /* 交互提示环 */
@@ -1296,46 +1311,35 @@
       ctx.globalAlpha = 1;
       var bob = Math.sin(t * 1.6 + npc.bob) * 1.6;
       ctx.translate(0, bob);
-      // 身体（斗篷）
-      var bgr = ctx.createLinearGradient(-r * 0.7, -r * 0.4, r * 0.7, r * 1.1);
-      bgr.addColorStop(0, npc.color);
-      bgr.addColorStop(1, 'rgba(20,14,26,0.95)');
-      ctx.fillStyle = bgr;
-      ctx.beginPath();
-      ctx.moveTo(-r * 0.62, r * 0.8);
-      ctx.quadraticCurveTo(-r * 0.72, -r * 0.35, 0, -r * 0.42);
-      ctx.quadraticCurveTo(r * 0.72, -r * 0.35, r * 0.62, r * 0.8);
-      ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1.6; ctx.stroke();
-      // 头
-      ctx.fillStyle = '#f0b8c8';
-      ctx.beginPath(); ctx.arc(0, -r * 0.62, r * 0.42, 0, TAU); ctx.fill();
-      // 眼睛
-      ctx.fillStyle = '#33202c';
-      ctx.beginPath();
-      ctx.arc(-r * 0.15, -r * 0.64, r * 0.07, 0, TAU);
-      ctx.arc(r * 0.15, -r * 0.64, r * 0.07, 0, TAU);
-      ctx.fill();
-      // 职业特征
-      if (npc.icon === 'anvil') {
-        // 铁匠：围裙 + 锤子
-        ctx.fillStyle = 'rgba(40,28,22,0.9)';
-        roundRect(ctx, -r * 0.34, -r * 0.1, r * 0.68, r * 0.8, 4); ctx.fill();
-        ctx.strokeStyle = '#8a6a44'; ctx.lineWidth = 5; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(r * 0.55, r * 0.1); ctx.lineTo(r * 0.95, -r * 0.5); ctx.stroke();
-        ctx.fillStyle = '#b9b4c4';
-        roundRect(ctx, r * 0.82, -r * 0.78, r * 0.42, r * 0.34, 3); ctx.fill();
-      } else {
-        // 商人：帽子 + 钱袋
-        ctx.fillStyle = '#4a3a6a';
+      var charKey = npc.key === 'blacksmith' ? 'blacksmith'
+        : (npc.key === 'merchant' ? 'merchant' : null);
+      var drawn = charKey && this.drawCharIcon(ctx, charKey, 0, -4, Math.round(r * 2.6));
+      if (!drawn) {
+        // 回退：旧版斗篷剪影
+        var bgr = ctx.createLinearGradient(-r * 0.7, -r * 0.4, r * 0.7, r * 1.1);
+        bgr.addColorStop(0, npc.color);
+        bgr.addColorStop(1, 'rgba(20,14,26,0.95)');
+        ctx.fillStyle = bgr;
         ctx.beginPath();
-        ctx.moveTo(-r * 0.62, -r * 0.9);
-        ctx.lineTo(r * 0.62, -r * 0.9);
-        ctx.lineTo(0, -r * 1.5);
+        ctx.moveTo(-r * 0.62, r * 0.8);
+        ctx.quadraticCurveTo(-r * 0.72, -r * 0.35, 0, -r * 0.42);
+        ctx.quadraticCurveTo(r * 0.72, -r * 0.35, r * 0.62, r * 0.8);
         ctx.closePath(); ctx.fill();
-        ctx.fillStyle = '#ffd75e';
-        ctx.beginPath(); ctx.arc(-r * 0.6, r * 0.35, r * 0.26, 0, TAU); ctx.fill();
-        ctx.strokeStyle = 'rgba(120,70,0,0.7)'; ctx.lineWidth = 1.6; ctx.stroke();
+        ctx.fillStyle = '#f0b8c8';
+        ctx.beginPath(); ctx.arc(0, -r * 0.62, r * 0.42, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#33202c';
+        ctx.beginPath();
+        ctx.arc(-r * 0.15, -r * 0.64, r * 0.07, 0, TAU);
+        ctx.arc(r * 0.15, -r * 0.64, r * 0.07, 0, TAU);
+        ctx.fill();
+      }
+      // 走近时脚下小光圈
+      if (isNear) {
+        ctx.globalAlpha = 0.35 + 0.2 * Math.sin(t * 5);
+        ctx.strokeStyle = npc.color || '#ffe9a8';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(0, r * 0.75, r * 0.95, r * 0.32, 0, 0, TAU); ctx.stroke();
+        ctx.globalAlpha = 1;
       }
     }
 
