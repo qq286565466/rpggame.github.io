@@ -499,7 +499,7 @@
       pushCharSync();
       syncHideoutRemotes();
       refreshOnlineUi();
-      ui.flash('已接入联机大厅', true);
+      ui.flash('已加入服务器', true);
     });
     online.on('pong', function () {
       if (!online || !online.connected) return;
@@ -521,7 +521,7 @@
     });
     online.on('error', function (e) {
       if (!(online && online._wantConnect)) ui.setOnlineStatus('连接失败', false);
-      ui.flash((e && e.reason) || '联机失败');
+      ui.flash((e && e.reason) || '无法加入服务器');
     });
     online.on('peers', function () { syncHideoutRemotes(); refreshOnlineUi(); });
     online.on('peer_join', function () { syncHideoutRemotes(); refreshOnlineUi(); });
@@ -579,7 +579,7 @@
     var urlInp = doc.getElementById('onlineUrl');
     if (urlInp) urlInp.value = wsUrl;
     if (online && online.url === wsUrl && online.connected) {
-      ui.flash('已在联机大厅', true);
+      ui.flash('已在该服务器中', true);
       return;
     }
     if (online) {
@@ -923,7 +923,7 @@
       onOnlineConnect: function (url) { connectOnline(url); },
       onOnlineDisconnect: function () { disconnectOnline(); },
       onPartyCreate: function () {
-        if (!online || !online.connected) return ui.flash('请先接入联机大厅');
+        if (!online || !online.connected) return ui.flash('请先加入服务器（联机 → 加入服务器）');
         pushCharSync();
         online.createParty();
         ui.flash('已创建队伍', true);

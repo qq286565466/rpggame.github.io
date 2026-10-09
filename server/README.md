@@ -58,7 +58,7 @@ node server/index.mjs 4321
 PORT=4321 HOST=0.0.0.0 MAX_PEERS=64 node server/index.mjs
 ```
 
-浏览器打开 `http://127.0.0.1:4321`，点「联机」接入。
+浏览器打开 `http://127.0.0.1:4321`，点「联机」→ 服务器列表 / 直接连接（类似 Minecraft）加入。
 
 ## HTTP API
 
