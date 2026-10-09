@@ -289,6 +289,20 @@
     content: ''; position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%;
     background: var(--green); box-shadow: 0 0 6px rgba(157, 255, 176, .95);
   }
+  .cell .lk, .equip-slot .lk, .forge-row .lk {
+    position: absolute; top: 3px; left: 3px; z-index: 2; pointer-events: none;
+    min-width: 14px; height: 14px; padding: 0 3px; border-radius: 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 800; letter-spacing: 0;
+    color: #2a1a05; background: linear-gradient(180deg, #ffe0a0, #d4a24a);
+    box-shadow: 0 1px 2px rgba(0,0,0,.45);
+  }
+  .cell.is-locked { box-shadow: inset 0 0 0 1px rgba(255, 210, 122, .28); }
+  .equip-slot { position: relative; }
+  .equip-slot .lk { top: 16px; left: 5px; }
+  .forge-row { position: relative; }
+  .forge-row .lk { top: 7px; left: 7px; }
+  #actLock.on { color: #ffd27a; border-color: rgba(255, 210, 122, .55); }
   .px-icon {
     display: block; object-fit: contain; pointer-events: none;
     image-rendering: pixelated; image-rendering: crisp-edges;
@@ -883,9 +897,10 @@
             </div>
             <div class="bag-grid" id="bagGrid"></div>
             <div class="bag-actions" id="bagActions">
-              <span class="tiny muted" id="selName">点选一件装备，可以换上、分解或出售</span>
+              <span class="tiny muted" id="selName">点选一件装备，可以换上、上锁、分解或出售</span>
               <span class="spacer"></span>
               <button id="actEquip" class="primary tiny-btn hidden">装备</button>
+              <button id="actLock" class="ghost tiny-btn hidden">上锁</button>
               <button id="actSalvage" class="tiny-btn hidden">分解</button>
               <button id="actSell" class="tiny-btn hidden">出售</button>
               <button id="actUnequip" class="ghost tiny-btn hidden">卸下</button>
@@ -1002,7 +1017,8 @@
           <b>副本</b>：刷够击杀配额后关底首领出现，击败即通关并解锁更深一层。
           怪物等级越高，掉落装备的物品等级也越高；装备跟不上就会打不动、也扛不住，需要回浅层刷装备。<br><br>
           <b>装备</b>：7 个部位、5 种品质、随机词条。强化每级 +7% 全属性；重铸保留词条种类重掷数值；
-          分解与出售是背包清理的主要手段。悬浮任意装备可以看到与当前装备的逐项对比。
+          分解与出售是背包清理的主要手段。重要装备可点「上锁」防止被分解、出售或批量清理。
+          悬浮任意装备可以看到与当前装备的逐项对比。
         </div>
         <div class="help-foot">
           <span class="version-badge"><span class="vb-label">版本</span><span id="helpVersionNum">—</span></span>
