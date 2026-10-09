@@ -23,6 +23,14 @@
     this.handlers = {};
     this._posAcc = 0;
     this.pendingInvite = null;
+    this._profile = null;
+    this._wantConnect = false;
+    this._heartbeat = null;
+    this._reconnectTimer = null;
+    this._reconnectAttempt = 0;
+    this.autoReconnect = opts.autoReconnect !== false;
+    this.rttMs = null;
+    this.serverInfo = null;
   }
 
   OnlineClient.prototype.on = function (type, fn) {
@@ -39,26 +47,34 @@
 
   OnlineClient.prototype.connect = function (profile) {
     var self = this;
-    profile = profile || {};
+    profile = profile || this._profile || {};
+    this._profile = profile;
+    this._wantConnect = true;
+    this._clearReconnect();
     if (this.ws && (this.ws.readyState === 0 || this.ws.readyState === 1)) {
+      this._manualClose = true;
       this.disconnect();
     }
+    this._manualClose = false;
     var url = this.url;
     var ws;
     try { ws = new WebSocket(url); }
     catch (e) {
       this.emit('error', { reason: '无法创建连接：' + (e && e.message) });
+      this._scheduleReconnect();
       return;
     }
     this.ws = ws;
     ws.onopen = function () {
       self.connected = true;
+      self._reconnectAttempt = 0;
       self.send({
         t: 'hello',
         name: profile.name || '旅人',
         level: profile.level || 1,
         x: profile.x, y: profile.y, facing: profile.facing
       });
+      self._startHeartbeat();
       self.emit('open', {});
     };
     ws.onmessage = function (ev) {
@@ -71,14 +87,58 @@
       self.id = null;
       self.peers = {};
       self.party = null;
+      self._stopHeartbeat();
       self.emit('close', {});
+      if (self._wantConnect && !self._manualClose && self.autoReconnect) {
+        self._scheduleReconnect();
+      }
     };
     ws.onerror = function () {
-      self.emit('error', { reason: '联机连接失败（请确认已运行 npm run online）' });
+      self.emit('error', { reason: '联机连接失败（请确认已运行 npm run online / node server）' });
     };
   };
 
+  OnlineClient.prototype._startHeartbeat = function () {
+    var self = this;
+    this._stopHeartbeat();
+    this._heartbeat = setInterval(function () {
+      if (!self.connected) return;
+      self.send({ t: 'ping', ts: Date.now() });
+    }, 10000);
+  };
+
+  OnlineClient.prototype._stopHeartbeat = function () {
+    if (this._heartbeat) {
+      clearInterval(this._heartbeat);
+      this._heartbeat = null;
+    }
+  };
+
+  OnlineClient.prototype._clearReconnect = function () {
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+  };
+
+  OnlineClient.prototype._scheduleReconnect = function () {
+    var self = this;
+    if (!this.autoReconnect || !this._wantConnect) return;
+    this._clearReconnect();
+    var attempt = this._reconnectAttempt++;
+    var delay = Math.min(15000, 800 * Math.pow(1.6, attempt));
+    this.emit('reconnecting', { attempt: attempt + 1, delay: delay });
+    this._reconnectTimer = setTimeout(function () {
+      self._reconnectTimer = null;
+      if (self._wantConnect) self.connect(self._profile);
+    }, delay);
+  };
+
   OnlineClient.prototype.disconnect = function () {
+    this._wantConnect = false;
+    this._manualClose = true;
+    this._clearReconnect();
+    this._stopHeartbeat();
     if (this.ws) {
       try { this.ws.close(); } catch (e) { /* ignore */ }
     }
@@ -94,8 +154,14 @@
 
   OnlineClient.prototype._handle = function (msg) {
     if (!msg || !msg.t) return;
+    if (msg.t === 'pong') {
+      if (msg.ts) this.rttMs = Math.max(0, Date.now() - msg.ts);
+      this.emit('pong', msg);
+      return;
+    }
     if (msg.t === 'welcome') {
       this.id = msg.id;
+      this.serverInfo = msg.server || null;
       this.peers = {};
       (msg.peers || []).forEach(function (p) { this.peers[p.id] = p; }, this);
       this.emit('welcome', msg);

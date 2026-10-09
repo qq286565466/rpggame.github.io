@@ -3,13 +3,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.11.0';
+  SP.VERSION = '2.11.1';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.11.1',
+      date: '2026-10-09',
+      title: '独立联机服务端',
+      items: [
+        '联机逻辑拆为 server/ 服务端：HTTP 静态站 + WebSocket 大厅 + /api/status·rooms',
+        '服务端心跳与超时清理；客户端应用层 ping/pong 与断线自动重连',
+        'npm run online / npm run server 启动；公网部署说明见 server/README.md'
+      ]
+    },
     {
       version: '2.11.0',
       date: '2026-10-09',

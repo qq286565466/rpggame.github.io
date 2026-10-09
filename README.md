@@ -1,6 +1,6 @@
 # 时空猪 · 科多兽远征
 
-**当前版本：v2.11.0**（详见 [CHANGELOG.md](./CHANGELOG.md)；游戏内登录页与帮助面板也可查看更新日志）
+**当前版本：v2.11.1**（详见 [CHANGELOG.md](./CHANGELOG.md)；游戏内登录页与帮助面板也可查看更新日志）
 
 一个**纯前端动作 RPG**，核心是**刷装备养成**：在**藏身处**里整备，通过时空传送门进出四个生物群系的地下城，刷怪掉装备，比较词条、强化重铸、穿更强的装备，再往更深一层推。支持可选的**多人联机**（共享藏身处、组队或单刷副本）。
 
@@ -27,10 +27,13 @@ npm run online         # → http://127.0.0.1:4321  页面内点「联机」接�
 
 ## 多人联机
 
-1. 主机运行 `npm run online`，用浏览器打开 `http://127.0.0.1:4321`。
+联机由仓库内 **Node 服务端**（`server/`）提供，零第三方依赖。
+
+1. 主机运行 `npm run online`（或 `npm run server`），用浏览器打开 `http://127.0.0.1:4321`。
 2. 登录后点藏身处底部 **联机**，接入大厅；其他玩家用同一地址接入后，会在藏身处互相看见。
 3. **创建队伍**并 **邀请**；队长在传送门选层发车即可组队进本。未组队时点进入为**联机单刷**。
-4. 组队副本由**房主权威**模拟战斗，同伴接收快照并提交输入；也可不组队各自刷本。
+4. 组队副本由**房主权威**模拟战斗，同伴接收快照并提交输入；服务端负责大厅与中继。
+5. 状态接口：`/api/status`、`/api/rooms`。公网部署见 [server/README.md](./server/README.md)。
 
 ## 藏身处
 
@@ -154,14 +157,15 @@ src/items.js          装备系统：基础库、词条池、品质、随机生�
 src/sim.js            纯逻辑战斗与副本模拟（不触碰 DOM）：派生属性、四群系怪物、首领、掉落
 src/progress.js       存档与养成层：背包/装备/强化/重铸/分解/出售、副本解锁、收益入账
 src/hideout.js        藏身处场景（纯逻辑）：走动、碰撞、NPC 邻近判定、点击选取、联机远程玩家
-src/net.js            多人联机客户端（WebSocket 大厅 / 组队 / 副本中继）
+src/net.js            多人联机客户端（WebSocket 大厅 / 组队 / 副本中继 / 重连）
 src/render.js         Canvas 2D 渲染：藏身处场景与 NPC、四地形与障碍、五类怪物家族、掉落光柱
 src/audio.js          WebAudio 实时合成音效
 src/ui.js             账号存档、藏身处 HUD、面板（背包/铁匠/商店/传送门/联机/战绩/帮助/更新日志）、战斗 HUD、结算
 src/main.js           输入、主循环、藏身处 ↔ 副本流程、联机房主/客机循环
+server/               联机服务端（HTTP + WebSocket，零依赖）：大厅 / 组队 / 副本中继
 tools/build.mjs       打包成单文件 HTML
-tools/serve.mjs       开发用静态服务器
-tools/online-server.mjs 多人联机：静态站 + WebSocket 大厅（零依赖）
+tools/serve.mjs       开发用静态服务器（仅单机，无联机）
+tools/online-server.mjs 兼容入口 → server/index.mjs
 tools/cdp.mjs         无头浏览器抓图 + 页面异常回收（DevTools 协议，零依赖）
 tools/e2e.mjs         一条命令跑完全部验收
 tools/progression.mjs 养成循环试玩机器人（自动刷本、换装、强化、金币换材料）+ 平衡基线断言
@@ -169,7 +173,7 @@ test/sim.test.mjs     战斗与副本
 test/items.test.mjs   装备系统（含强化成本预算与分解返还）
 test/progress.test.mjs 存档养成层
 test/hideout.test.mjs 藏身处场景
-test/net.test.mjs     联机客户端 / 组队 World / 大厅服务器
+test/net.test.mjs     联机客户端 / 组队 World / 联机服务端
 test/e2e/flow.js      真实浏览器端到端（新号全流程，含面板劫持/HUD 点击穿透/金币换材料回归）
 test/e2e/migrate.js   旧存档迁移：写入 v1 存档并刷新页面
 test/e2e/probe-migrate.js 旧存档迁移断言

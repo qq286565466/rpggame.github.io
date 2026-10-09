@@ -493,13 +493,23 @@
   function wireOnline(client) {
     online = client;
     online.on('welcome', function () {
-      ui.setOnlineStatus('已接入 · ' + (online.id || ''), true);
+      var rtt = online.rttMs != null ? (' · ' + online.rttMs + 'ms') : '';
+      ui.setOnlineStatus('已接入 · ' + (online.id || '') + rtt, true);
       pushCharSync();
       syncHideoutRemotes();
       refreshOnlineUi();
       ui.flash('已接入联机大厅', true);
     });
+    online.on('pong', function () {
+      if (!online || !online.connected) return;
+      var rtt = online.rttMs != null ? (' · ' + online.rttMs + 'ms') : '';
+      ui.setOnlineStatus('已接入 · ' + (online.id || '') + rtt, true);
+    });
+    online.on('reconnecting', function (info) {
+      ui.setOnlineStatus('重连中… (' + (info && info.attempt || '?') + ')', false);
+    });
     online.on('close', function () {
+      if (online && online._wantConnect) return; // 自动重连中
       ui.setOnlineStatus('离线', false);
       onlineRole = null;
       onlineHostId = null;
@@ -509,7 +519,7 @@
       refreshOnlineUi();
     });
     online.on('error', function (e) {
-      ui.setOnlineStatus('连接失败', false);
+      if (!(online && online._wantConnect)) ui.setOnlineStatus('连接失败', false);
       ui.flash((e && e.reason) || '联机失败');
     });
     online.on('peers', function () { syncHideoutRemotes(); refreshOnlineUi(); });
@@ -567,10 +577,15 @@
       ui.flash('请先登录');
       return;
     }
+    var wsUrl = (url && String(url).trim()) || SP.OnlineClient.defaultWsUrl();
+    if (online && online.url === wsUrl && online.connected) {
+      ui.flash('已在联机大厅', true);
+      return;
+    }
     if (online) {
       try { online.disconnect(); } catch (e) { /* ignore */ }
     }
-    var client = new SP.OnlineClient({ url: url || SP.OnlineClient.defaultWsUrl() });
+    var client = new SP.OnlineClient({ url: wsUrl, autoReconnect: true });
     wireOnline(client);
     ui.setOnlineStatus('连接中…', false);
     var h = ui.hideout;
