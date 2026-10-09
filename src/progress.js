@@ -545,14 +545,18 @@
     return { ok: true, cost: cost, steaks: ch.steaks };
   }
 
-  /** 用秘宝向神秘商人换一件随机稀有以上装备 */
+  /** 用秘宝向神秘商人换一件随机高品质装备（保底精良） */
   var MYSTERY_COST = 6;
   function buyMysteryItem(ch, ilvl, slot) {
     if (ch.stones < MYSTERY_COST) return { ok: false, reason: 'alpha-stone 不足（需要 ' + MYSTERY_COST + '）' };
     if (ch.inventory.length >= INVENTORY_CAP) return { ok: false, reason: '背包已满' };
     ch.stones -= MYSTERY_COST;
-    var item = I.roll(SP.makeRng((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0),
-      { ilvl: ilvl, slot: slot, rarityBias: 2.2, luck: 0.4 });
+    var rng = SP.makeRng((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0);
+    var item = null;
+    for (var tries = 0; tries < 12; tries++) {
+      item = I.roll(rng, { ilvl: ilvl, slot: slot, rarityBias: 2.2 + tries * 0.4, luck: 0.4 });
+      if (I.RARITY_BY_KEY[item.rarity].index >= 1) break;
+    }
     ch.inventory.push(item);
     discoverGear(ch, item);
     return { ok: true, item: item, cost: MYSTERY_COST };
