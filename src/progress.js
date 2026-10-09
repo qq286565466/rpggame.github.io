@@ -26,8 +26,126 @@
       progress: { camp: 0, forest: 0, cave: 0, nest: 0 },
       stats: { runs: 0, clears: 0, deaths: 0, bestFloor: {} , kills: 0, lootFound: 0 },
       bestiary: {},
+      gearCodex: { bases: {}, uniques: {} },
       created: Date.now()
     };
+  }
+
+  function ensureGearCodex(ch) {
+    if (!ch.gearCodex || typeof ch.gearCodex !== 'object') ch.gearCodex = { bases: {}, uniques: {} };
+    if (!ch.gearCodex.bases || typeof ch.gearCodex.bases !== 'object') ch.gearCodex.bases = {};
+    if (!ch.gearCodex.uniques || typeof ch.gearCodex.uniques !== 'object') ch.gearCodex.uniques = {};
+    return ch.gearCodex;
+  }
+
+  function rarityRank(key) {
+    var r = I.RARITY_BY_KEY[key];
+    return r ? r.index : -1;
+  }
+
+  /**
+   * 登记一件装备到装备图鉴。
+   * opts.inc=false 时只解锁/刷新最高品质，不累加获得次数（用于读档回填）。
+   */
+  function discoverGear(ch, item, opts) {
+    if (!ch || !item || !item.base || !I.BASE_BY_KEY[item.base]) return false;
+    opts = opts || {};
+    var inc = opts.inc !== false;
+    var codex = ensureGearCodex(ch);
+    var dst = codex.bases[item.base];
+    if (!dst) {
+      dst = codex.bases[item.base] = {
+        count: 0,
+        bestRarity: item.rarity || 'common',
+        firstAt: Date.now()
+      };
+    }
+    if (inc) dst.count = Math.max(0, Math.round(Number(dst.count) || 0)) + 1;
+    else dst.count = Math.max(1, Math.round(Number(dst.count) || 0));
+    if (rarityRank(item.rarity) > rarityRank(dst.bestRarity)) dst.bestRarity = item.rarity;
+    if (!dst.firstAt) dst.firstAt = Date.now();
+    if (item.unique && I.UNIQUE_BY_KEY[item.unique]) {
+      var u = codex.uniques[item.unique];
+      if (!u) u = codex.uniques[item.unique] = { count: 0, firstAt: Date.now() };
+      if (inc) u.count = Math.max(0, Math.round(Number(u.count) || 0)) + 1;
+      else u.count = Math.max(1, Math.round(Number(u.count) || 0));
+      if (!u.firstAt) u.firstAt = Date.now();
+    }
+    return true;
+  }
+
+  function syncGearCodexFromOwned(ch) {
+    if (!ch) return;
+    (ch.inventory || []).forEach(function (it) { discoverGear(ch, it, { inc: false }); });
+    I.EQUIP_SLOTS.forEach(function (s) {
+      if (ch.equipped && ch.equipped[s]) discoverGear(ch, ch.equipped[s], { inc: false });
+    });
+  }
+
+  function isGearDiscovered(ch, baseKey) {
+    var e = ch && ch.gearCodex && ch.gearCodex.bases && ch.gearCodex.bases[baseKey];
+    return !!(e && (e.count || 0) > 0);
+  }
+
+  function isUniqueDiscovered(ch, uniqueKey) {
+    var e = ch && ch.gearCodex && ch.gearCodex.uniques && ch.gearCodex.uniques[uniqueKey];
+    return !!(e && (e.count || 0) > 0);
+  }
+
+  function gearCodexProgress(ch) {
+    var bases = I.allBases();
+    var found = 0;
+    bases.forEach(function (b) { if (isGearDiscovered(ch, b.key)) found++; });
+    return { found: found, total: bases.length };
+  }
+
+  function uniqueCodexProgress(ch) {
+    var total = (I.UNIQUES || []).length;
+    var found = 0;
+    (I.UNIQUES || []).forEach(function (u) { if (isUniqueDiscovered(ch, u.key)) found++; });
+    return { found: found, total: total };
+  }
+
+  /** 按部位整理装备图鉴 */
+  function gearCodexCatalog(ch) {
+    var out = [];
+    I.GEAR_SLOT_ORDER.forEach(function (slot) {
+      var list = I.BASES[slot] || [];
+      var entries = list.map(function (b) {
+        var rec = ch && ch.gearCodex && ch.gearCodex.bases && ch.gearCodex.bases[b.key];
+        var discovered = !!(rec && (rec.count || 0) > 0);
+        return {
+          key: b.key,
+          slot: slot,
+          def: b,
+          discovered: discovered,
+          count: discovered ? (rec.count || 0) : 0,
+          bestRarity: discovered ? (rec.bestRarity || 'common') : null,
+          firstAt: discovered ? (rec.firstAt || 0) : 0
+        };
+      });
+      out.push({
+        slot: slot,
+        name: (I.SLOT_META[slot] && I.SLOT_META[slot].name) || slot,
+        entries: entries
+      });
+    });
+    return out;
+  }
+
+  /** 传说独特效果图鉴 */
+  function uniqueCodexCatalog(ch) {
+    return (I.UNIQUES || []).map(function (u) {
+      var rec = ch && ch.gearCodex && ch.gearCodex.uniques && ch.gearCodex.uniques[u.key];
+      var discovered = !!(rec && (rec.count || 0) > 0);
+      return {
+        key: u.key,
+        def: u,
+        discovered: discovered,
+        count: discovered ? (rec.count || 0) : 0,
+        firstAt: discovered ? (rec.firstAt || 0) : 0
+      };
+    });
   }
 
   /** 把本局击杀并入图鉴：{ [enemyKey]: { kills, elites } } */
@@ -116,6 +234,7 @@
     var starter = I.roll(SP.makeRng(20240501), { ilvl: 1, slot: 'weapon', rarityBias: 1.2 });
     starter.name = '新手·' + starter.baseName;
     ch.equipped.weapon = starter;
+    discoverGear(ch, starter);
     return ch;
   }
 
@@ -131,6 +250,8 @@
   function addLoot(ch, items) {
     var added = 0, overflow = [];
     (items || []).forEach(function (it) {
+      // 只要捡到过就记入图鉴（即便背包满溢出也算见过）
+      discoverGear(ch, it);
       if (ch.inventory.length < INVENTORY_CAP) { ch.inventory.push(it); added++; }
       else overflow.push(it);
     });
@@ -364,6 +485,7 @@
     var item = I.roll(SP.makeRng((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0),
       { ilvl: ilvl, slot: slot, rarityBias: 2.2, luck: 0.4 });
     ch.inventory.push(item);
+    discoverGear(ch, item);
     return { ok: true, item: item, cost: MYSTERY_COST };
   }
 
@@ -411,11 +533,42 @@
       };
     });
     ch.bestiary = cleanB;
+    // 装备图鉴：清洗未知 base / unique
+    var rawG = (ch.gearCodex && typeof ch.gearCodex === 'object') ? ch.gearCodex : {};
+    var cleanBases = {}, cleanUniques = {};
+    var rawBases = (rawG.bases && typeof rawG.bases === 'object') ? rawG.bases : {};
+    var rawUniques = (rawG.uniques && typeof rawG.uniques === 'object') ? rawG.uniques : {};
+    Object.keys(rawBases).forEach(function (key) {
+      if (!I.BASE_BY_KEY[key]) return;
+      var rec = rawBases[key] || {};
+      var count = Math.max(0, Math.round(num(rec.count)));
+      if (count <= 0) return;
+      var br = rec.bestRarity;
+      if (!I.RARITY_BY_KEY[br]) br = 'common';
+      cleanBases[key] = {
+        count: count,
+        bestRarity: br,
+        firstAt: Math.max(0, Math.round(num(rec.firstAt, Date.now())))
+      };
+    });
+    Object.keys(rawUniques).forEach(function (key) {
+      if (!I.UNIQUE_BY_KEY[key]) return;
+      var rec = rawUniques[key] || {};
+      var count = Math.max(0, Math.round(num(rec.count)));
+      if (count <= 0) return;
+      cleanUniques[key] = {
+        count: count,
+        firstAt: Math.max(0, Math.round(num(rec.firstAt, Date.now())))
+      };
+    });
+    ch.gearCodex = { bases: cleanBases, uniques: cleanUniques };
     // 丢弃结构损坏的装备，避免后续计算炸掉
     ch.inventory = ch.inventory.filter(function (it) { return validItem(it); });
     I.EQUIP_SLOTS.forEach(function (s) {
       if (ch.equipped[s] && !validItem(ch.equipped[s])) ch.equipped[s] = null;
     });
+    // 旧存档回填：已拥有的装备记入图鉴
+    syncGearCodexFromOwned(ch);
     return ch;
   }
 
@@ -457,6 +610,14 @@
     mergeBestiary: mergeBestiary,
     isDiscovered: isDiscovered,
     bestiaryProgress: bestiaryProgress,
-    bestiaryCatalog: bestiaryCatalog
+    bestiaryCatalog: bestiaryCatalog,
+    discoverGear: discoverGear,
+    syncGearCodexFromOwned: syncGearCodexFromOwned,
+    isGearDiscovered: isGearDiscovered,
+    isUniqueDiscovered: isUniqueDiscovered,
+    gearCodexProgress: gearCodexProgress,
+    uniqueCodexProgress: uniqueCodexProgress,
+    gearCodexCatalog: gearCodexCatalog,
+    uniqueCodexCatalog: uniqueCodexCatalog
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
