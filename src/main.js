@@ -573,7 +573,11 @@
       ui.flash('请先登录');
       return;
     }
-    var wsUrl = (url && String(url).trim()) || SP.OnlineClient.defaultWsUrl();
+    var wsUrl = SP.OnlineClient.normalizeWsUrl(
+      (url && String(url).trim()) || SP.OnlineClient.defaultWsUrl()
+    );
+    var urlInp = doc.getElementById('onlineUrl');
+    if (urlInp) urlInp.value = wsUrl;
     if (online && online.url === wsUrl && online.connected) {
       ui.flash('已在联机大厅', true);
       return;

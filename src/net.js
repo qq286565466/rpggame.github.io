@@ -12,9 +12,27 @@
     return proto + '//' + location.host + '/ws';
   }
 
+  /**
+   * 规范化联机地址（SakuraFrp / 穿透常用）。
+   * - http→ws、https→wss
+   * - 自动补 /ws
+   * - 支持只填 host:port
+   */
+  function normalizeWsUrl(raw) {
+    var u = String(raw == null ? '' : raw).trim();
+    if (!u) return defaultWsUrl();
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) u = 'ws://' + u;
+    u = u.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
+    // 去掉哈希与多余斜杠
+    u = u.split('#')[0].split('?')[0];
+    u = u.replace(/\/+$/, '');
+    if (!/\/ws$/i.test(u)) u += '/ws';
+    return u;
+  }
+
   function OnlineClient(opts) {
     opts = opts || {};
-    this.url = opts.url || defaultWsUrl();
+    this.url = normalizeWsUrl(opts.url || defaultWsUrl());
     this.ws = null;
     this.id = null;
     this.connected = false;
@@ -284,6 +302,7 @@
   };
 
   OnlineClient.defaultWsUrl = defaultWsUrl;
+  OnlineClient.normalizeWsUrl = normalizeWsUrl;
   OnlineClient.packCharacter = function (ch) {
     ch = ch || {};
     return {

@@ -276,9 +276,26 @@
     });
     $('#btnOnline').addEventListener('click', function () { self.togglePanel('online'); });
     var urlInp = doc.getElementById('onlineUrl');
-    if (urlInp && SP.OnlineClient) urlInp.value = SP.OnlineClient.defaultWsUrl();
+    if (urlInp && SP.OnlineClient) {
+      var fromQuery = '';
+      try {
+        var qs = new URLSearchParams(global.location && global.location.search || '');
+        fromQuery = qs.get('ws') || qs.get('online') || '';
+      } catch (e) { fromQuery = ''; }
+      urlInp.value = fromQuery
+        ? SP.OnlineClient.normalizeWsUrl(fromQuery)
+        : SP.OnlineClient.defaultWsUrl();
+      urlInp.placeholder = 'ws://主机:端口/ws 或穿透地址';
+      // 带 ?ws= 的一键加入链接：进入后提示可直接接入
+      if (fromQuery) {
+        self._pendingOnlineUrl = urlInp.value;
+      }
+    }
     $('#btnOnlineConnect').addEventListener('click', function () {
-      if (self.hooks.onOnlineConnect) self.hooks.onOnlineConnect(self.$('onlineUrl').value);
+      var raw = self.$('onlineUrl').value;
+      var norm = SP.OnlineClient ? SP.OnlineClient.normalizeWsUrl(raw) : raw;
+      if (self.$('onlineUrl')) self.$('onlineUrl').value = norm;
+      if (self.hooks.onOnlineConnect) self.hooks.onOnlineConnect(norm);
     });
     $('#btnOnlineDisconnect').addEventListener('click', function () {
       if (self.hooks.onOnlineDisconnect) self.hooks.onOnlineDisconnect();
@@ -557,6 +574,17 @@
   UI.prototype.enterHideout = function () {
     if (!this.hideout) this.hideout = new SP.Hideout();
     this.showScreen('hideout');
+    // 一键加入链接 ?ws=… ：进入藏身处后打开联机面板并填好地址
+    if (this._pendingOnlineUrl) {
+      var joinUrl = this._pendingOnlineUrl;
+      this._pendingOnlineUrl = null;
+      var self = this;
+      global.setTimeout(function () {
+        if (self.$('onlineUrl')) self.$('onlineUrl').value = joinUrl;
+        self.openPanel('online');
+        self.flash('已填入服主联机地址，点「接入大厅」即可', true);
+      }, 180);
+    }
   };
   /** 兼容旧调用名 */
   UI.prototype.enterHub = function () { this.enterHideout(); };

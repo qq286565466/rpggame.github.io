@@ -23,7 +23,7 @@ import { formatHostCard } from './hostinfo.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
-const VERSION = '2.11.3';
+const VERSION = '2.11.4';
 
 const port = Number(process.env.PORT || process.argv[2] || 4321);
 const host = process.env.HOST || '0.0.0.0';
@@ -44,6 +44,7 @@ function renderHostPage(info) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const pm = info.portMap || {};
   const u = info.urls || {};
+  const hasFrp = !!(info.frp && u.publicHttp);
   return `<!DOCTYPE html>
 <html lang="zh-CN"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -60,8 +61,9 @@ function renderHostPage(info) {
   .card h2 { margin: 0 0 10px; font-size: 1.05rem; color: var(--accent); }
   .warn { border-color: #6a5420; background: linear-gradient(180deg,#2a2414,#1a2230); }
   .warn h2 { color: var(--warn); }
+  .okcard { border-color: #2d6a45; }
   .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin: 6px 0; }
-  code, .mono { font-family: ui-monospace, Consolas, monospace; background:#0d121a; padding: 4px 8px; border-radius: 8px; border:1px solid var(--line); }
+  code, .mono { font-family: ui-monospace, Consolas, monospace; background:#0d121a; padding: 4px 8px; border-radius: 8px; border:1px solid var(--line); word-break: break-all; }
   .big { font-size: 1.15rem; font-weight: 700; letter-spacing: .02em; }
   a { color: var(--accent); }
   button { cursor:pointer; border:1px solid var(--line); background:#243247; color:var(--text);
@@ -71,17 +73,37 @@ function renderHostPage(info) {
   .ok { color: #9dffb0; }
 </style></head><body><main>
   <h1>时空猪 · 服主面板</h1>
-  <p class="lead">把下面信息发给好友前，请先完成端口映射。HTTP 与联机 WebSocket <strong>共用同一 TCP 端口</strong>。</p>
+  <p class="lead">HTTP 与联机 WebSocket <strong>共用同一 TCP 端口</strong>。用 SakuraFrp 时请把「访问地址」配进 PUBLIC_URL，并把<strong>穿透后的地址</strong>发给好友。</p>
 
   <section class="card warn">
-    <h2>必须映射的端口与 IP</h2>
-    <div class="row"><span>协议</span><span class="mono big">${esc(pm.protocol || 'TCP')}</span></div>
-    <div class="row"><span>外部端口</span><span class="mono big">${esc(pm.externalPort || info.port)}</span></div>
-    <div class="row"><span>内部 IP</span><span class="mono big">${esc(pm.internalIp || '本机局域网IP')}</span></div>
-    <div class="row"><span>内部端口</span><span class="mono big">${esc(pm.internalPort || info.port)}</span></div>
+    <h2>SakuraFrp / 内网穿透（远程好友）</h2>
     <ul>
-      <li>路由器 / 光猫：外网端口 ${esc(info.port)} → ${esc(pm.internalIp)}:${esc(info.port)}（TCP）</li>
-      <li>云主机：安全组 / 防火墙放行 TCP ${esc(info.port)} 入站</li>
+      <li>隧道类型选 <strong>TCP</strong>（需能转发 WebSocket；本地填 <code>127.0.0.1:${esc(info.port)}</code>）</li>
+      <li>启动穿透后重新部署：<code>node server/deploy.mjs --public=http://你的访问地址</code></li>
+      <li>好友必须打开<strong>穿透页面地址</strong>，不要用 127.0.0.1 / 局域网 IP</li>
+      <li>若穿透提供 https 域名，联机栏会使用 <code>wss://…/ws</code></li>
+    </ul>
+    ${hasFrp ? `
+    <div class="row" style="margin-top:12px"><span>发给好友的页面</span>
+      <code id="publicHttp" class="big">${esc(u.publicHttp)}</code>
+      <button type="button" data-copy="publicHttp">复制</button></div>
+    <div class="row"><span>联机栏填入</span>
+      <code id="publicWs" class="big">${esc(u.publicWs)}</code>
+      <button type="button" data-copy="publicWs">复制</button></div>
+    <div class="row"><span>一键加入链接</span>
+      <code id="joinUrl">${esc(u.join)}</code>
+      <button type="button" data-copy="joinUrl">复制</button></div>
+    ` : `
+    <p class="lead" style="margin-top:12px">当前<strong>未配置</strong> PUBLIC_URL。远程好友将无法通过穿透地址自动显示在此。请用穿透访问地址重启部署。</p>
+    `}
+  </section>
+
+  <section class="card">
+    <h2>本地监听（穿透「本地」填这个）</h2>
+    <div class="row"><span>协议</span><span class="mono big">TCP</span></div>
+    <div class="row"><span>本地</span><span class="mono big">127.0.0.1:${esc(info.port)}</span></div>
+    <ul>
+      <li>路由器端口映射：外网 ${esc(info.port)} → ${esc(pm.lanIp || '局域网IP')}:${esc(info.port)}</li>
       <li>${esc(pm.note || '')}</li>
     </ul>
   </section>
@@ -102,20 +124,10 @@ function renderHostPage(info) {
       <button type="button" data-copy="lanWs">复制</button></div>
   </section>` : ''}
 
-  ${u.publicHttp ? `<section class="card">
-    <h2>公网（完成映射后）</h2>
-    <div class="row">公网 IP <code>${esc(info.publicIp)}</code></div>
-    <div class="row">页面 <code id="publicHttp">${esc(u.publicHttp)}</code>
-      <button type="button" data-copy="publicHttp">复制</button></div>
-    <div class="row">联机 <code id="publicWs">${esc(u.publicWs)}</code>
-      <button type="button" data-copy="publicWs">复制</button></div>
-    <ul><li>若家宽无独立公网 IP（运营商 NAT），需内网穿透或改用云主机。</li></ul>
-  </section>` : `<section class="card"><h2>公网</h2><p class="lead">未能自动探测公网 IP。请在路由器 WAN 口查看，或访问 <a href="https://ip.sb" target="_blank" rel="noopener">ip.sb</a>。</p></section>`}
-
-  <section class="card">
+  <section class="card ${hasFrp ? 'okcard' : ''}">
     <h2>状态</h2>
     <p class="lead"><a href="/api/status">/api/status</a> · <a href="/">进入游戏</a> ·
-      <span class="ok">部署模式已启用</span></p>
+      ${hasFrp ? '<span class="ok">已配置穿透入口</span>' : '<span>未配置 PUBLIC_URL</span>'}</p>
   </section>
 <script>
 document.querySelectorAll('[data-copy]').forEach(function(btn){

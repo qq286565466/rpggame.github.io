@@ -1,6 +1,6 @@
 {
   "name": "space-time-pig",
-  "version": "2.11.3",
+  "version": "2.11.4",
   "private": true,
   "type": "module",
   "description": "时空猪 · 科多兽远征 —— 纯前端动作 RPG（刷装备养成；可选多人联机，零依赖）",

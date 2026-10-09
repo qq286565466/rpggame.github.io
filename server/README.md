@@ -23,6 +23,14 @@
 可选：当前用户放开脚本（仅本机）  
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
 
+**SakuraFrp / 内网穿透：**
+
+```bat
+node server\deploy.mjs --public=http://你的访问地址
+```
+
+详见 [FRP.md](./FRP.md)。
+
 **通用：**
 
 ```bash

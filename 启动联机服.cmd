@@ -5,9 +5,10 @@ cd /d "%~dp0"
 echo.
 echo  时空猪 · 服主部署（Windows）
 echo  --------------------------------
-echo  若 PowerShell 报「禁止运行脚本」，请用本文件，或改用：
-echo    npm.cmd run deploy
-echo    node server\deploy.mjs 4321
+echo  SakuraFrp：先开 TCP 隧道，本地 127.0.0.1:4321
+echo  然后可用（把地址换成你的访问地址）：
+echo    node server\deploy.mjs --public=http://xxx.sakurafrp.com:端口
+echo  说明见 server\FRP.md
 echo.
 
 where node >nul 2>&1
@@ -18,12 +19,19 @@ if errorlevel 1 (
   exit /b 1
 )
 
-REM 优先走 npm.cmd，避免 PowerShell 的 npm.ps1 被执行策略拦截
-where npm.cmd >nul 2>&1
-if not errorlevel 1 (
-  call npm.cmd run deploy
+if not "%PUBLIC_URL%"=="" (
+  echo 使用 PUBLIC_URL=%PUBLIC_URL%
+  node server\deploy.mjs --public=%PUBLIC_URL%
+) else if not "%~1"=="" (
+  echo 使用穿透地址 %~1
+  node server\deploy.mjs --public=%~1
 ) else (
-  node server\deploy.mjs 4321
+  where npm.cmd >nul 2>&1
+  if not errorlevel 1 (
+    call npm.cmd run deploy
+  ) else (
+    node server\deploy.mjs 4321
+  )
 )
 
 echo.
