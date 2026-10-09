@@ -556,8 +556,6 @@
 
     // 与 NPC 立绘同量级：按碰撞半径放大，避免再缩成「芝麻粒」
     var heroSz = Math.round(Math.max(60, (p.r || 17) * 3.4));
-    // 立绘脚底约在中心下方 0.4·sz；上移绘制让脚落在角色坐标上
-    var foot = heroSz * 0.4;
     var idleBob = Math.sin(this.t * 2.15) * 1.1 * idleEnergy
       + Math.sin(this.t * 4.3) * 0.25 * idleEnergy;
     var groundY = walkBob + idleBob;
@@ -567,17 +565,17 @@
       ctx.translate(sp.x, sp.y);
       ctx.rotate(Math.PI / 2 * 0.9);
       ctx.globalAlpha = 0.75;
-      if (!this.drawCharIcon(ctx, 'hero', 0, -foot, heroSz * 0.92)) this.drawPigBody(ctx, p, world, 0);
+      if (!this.drawCharIcon(ctx, 'hero', 0, 0, heroSz * 0.92)) this.drawPigBody(ctx, p, world, 0);
       ctx.restore();
       ctx.globalAlpha = 1;
       return;
     }
 
-    // 影子中心略低于脚底，使椭圆大部分在脚下而非身体里
+    // 影子落在身体下方（中心锚点，不随面向旋转）
     ctx.globalAlpha = 0.4;
     ctx.fillStyle = '#000';
-    ellipse(ctx, sp.x + 2, sp.y + groundY + heroSz * 0.05,
-      heroSz * 0.28 * shadowScale, heroSz * 0.10 * (2 - shadowScale)); ctx.fill();
+    ellipse(ctx, sp.x + 2, sp.y + groundY + heroSz * 0.22,
+      heroSz * 0.30 * shadowScale, heroSz * 0.12 * (2 - shadowScale)); ctx.fill();
     ctx.globalAlpha = 1;
 
     // 无敌帧闪烁
@@ -587,23 +585,22 @@
     ctx.translate(sp.x, sp.y);
     ctx.translate(0, walkBob);
     this.charIdlePose(ctx, this.t, 0.4, idleEnergy);
-    // 绕脚底转向鼠标 / 攻击方向（贴图默认朝 -y）
+    // 绕身体中心转向鼠标 / 攻击方向（贴图默认朝 -y）
     ctx.rotate(p.facing + Math.PI / 2);
-    // 护盾、赐福绕身体中心
     if (p.shield > 0) {
       ctx.save();
-      var sg = ctx.createRadialGradient(0, -foot, 16, 0, -foot, 34);
+      var sg = ctx.createRadialGradient(0, 0, 16, 0, 0, 34);
       sg.addColorStop(0, 'rgba(120,220,255,0.05)');
       sg.addColorStop(1, 'rgba(120,220,255,0.4)');
       ctx.fillStyle = sg;
-      ctx.beginPath(); ctx.arc(0, -foot, 32, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, 32, 0, TAU); ctx.fill();
       ctx.rotate(this.t * 1.2);
       ctx.strokeStyle = 'rgba(180,240,255,0.9)';
       ctx.lineWidth = 2;
       for (var d = 0; d < 6; d++) {
         var a = (d / 6) * TAU;
         ctx.beginPath();
-        ctx.arc(0, -foot, 30, a, a + 0.6);
+        ctx.arc(0, 0, 30, a, a + 0.6);
         ctx.stroke();
       }
       ctx.restore();
@@ -611,15 +608,15 @@
     if (p.dmgBuffT > 0) {
       ctx.globalAlpha = 0.35 + 0.2 * Math.sin(this.t * 8);
       ctx.strokeStyle = '#ffe9a8'; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.arc(0, -foot, 26, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, 26, 0, TAU); ctx.stroke();
       ctx.globalAlpha = 1;
     }
-    if (!this.drawCharIcon(ctx, 'hero', 0, -foot, heroSz)) {
+    if (!this.drawCharIcon(ctx, 'hero', 0, 0, heroSz)) {
       this.drawPigBody(ctx, p, world, 1);
     } else if (p.hurtFlash > 0) {
       ctx.globalAlpha = clamp(p.hurtFlash / 0.3, 0, 1) * 0.55;
       ctx.fillStyle = '#fff';
-      ellipse(ctx, 0, -foot, heroSz * 0.36, heroSz * 0.32); ctx.fill();
+      ellipse(ctx, 0, 0, heroSz * 0.36, heroSz * 0.32); ctx.fill();
       ctx.globalAlpha = 1;
     }
     ctx.restore();
@@ -1113,23 +1110,22 @@
     var pBreath = Math.sin(t * 2.15);
     var pShadow = 1 + pBreath * 0.08 * (pMoving ? 0.35 : 1);
     var hubHeroSz = Math.round(Math.max(72, (h.player.r || 17) * 4.2));
-    var hubFoot = hubHeroSz * 0.4;
     var hubWalkBob = Math.sin(h.player.walkPhase || 0) * (pMoving ? 1.35 : 0);
     var hubIdleE = pMoving ? 0.35 : 1;
     var hubIdleBob = Math.sin(t * 2.15) * 1.1 * hubIdleE
       + Math.sin(t * 4.3) * 0.25 * hubIdleE;
     ctx.globalAlpha = 0.4;
     ctx.fillStyle = '#000';
-    ellipse(ctx, pl.x + 2, pl.y + hubWalkBob + hubIdleBob + hubHeroSz * 0.05,
-      hubHeroSz * 0.28 * pShadow, hubHeroSz * 0.10 * (2 - pShadow)); ctx.fill();
+    ellipse(ctx, pl.x + 2, pl.y + hubWalkBob + hubIdleBob + hubHeroSz * 0.22,
+      hubHeroSz * 0.30 * pShadow, hubHeroSz * 0.12 * (2 - pShadow)); ctx.fill();
     ctx.globalAlpha = 1;
     ctx.save();
     ctx.translate(pl.x, pl.y);
     ctx.translate(0, hubWalkBob);
     this.charIdlePose(ctx, t, 0.4, hubIdleE);
-    // 藏身处也绕脚底朝向移动方向
+    // 藏身处绕身体中心朝向移动方向
     ctx.rotate(h.player.facing + Math.PI / 2);
-    if (!this.drawCharIcon(ctx, 'hero', 0, -hubFoot, hubHeroSz)) {
+    if (!this.drawCharIcon(ctx, 'hero', 0, 0, hubHeroSz)) {
       SP.Renderer.prototype.drawPigBody.call(this, ctx, {
         walkPhase: h.player.walkPhase, vx: h.player.vx, vy: h.player.vy, hurtFlash: 0
       }, null, 1);
