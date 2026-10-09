@@ -598,6 +598,22 @@
 
   UI.prototype.slotGlyph = function (slot) { return SP.Renderer.prototype.slotGlyph(slot); };
 
+  /** 怪物图鉴头像：已解锁显示像素立绘，未解锁保持神秘剪影 */
+  UI.prototype.enemyPortraitHtml = function (enemyKey, opts) {
+    opts = opts || {};
+    var sizeClass = opts.detail ? 'bd-portrait' : 'be-portrait';
+    var src = SP.ItemIcons && SP.ItemIcons.enemyUrl && SP.ItemIcons.enemyUrl(enemyKey);
+    if (opts.discovered && src) {
+      return '<div class="' + sizeClass + ' has-img"><img alt="" draggable="false" src="' + src + '"></div>';
+    }
+    var bg = opts.discovered
+      ? (opts.color || '#445')
+      : '#222836';
+    var style = 'background:' + bg;
+    if (!opts.discovered) style += ';filter:grayscale(1) brightness(.45)';
+    return '<div class="' + sizeClass + '" style="' + style + '"></div>';
+  };
+
   /** 装备像素图标。没有对应图时退回部位汉字。 */
   UI.prototype.iconHtml = function (itemOrSlot) {
     var icons = SP.ItemIcons;
@@ -1436,7 +1452,11 @@
         ? (kind + ' · 击杀 ' + entry.kills + (entry.elites ? '（精英 ' + entry.elites + '）' : ''))
         : '击败后解锁';
       card.innerHTML =
-        '<div class="be-portrait" style="background:' + esc(entry.discovered ? (def.color || '#445') : '#222836') + '"></div>' +
+        self.enemyPortraitHtml(entry.key, {
+          discovered: entry.discovered,
+          color: def.color,
+          detail: false
+        }) +
         '<div class="be-meta"><div class="be-name">' + esc(name) + '</div>' +
         '<div class="be-sub">' + esc(sub) + '</div></div>';
       card.addEventListener('click', function () {
@@ -1460,7 +1480,7 @@
     if (!entry.discovered) {
       box.innerHTML =
         '<div class="bd-head">' +
-        '<div class="bd-portrait" style="background:#222836;filter:grayscale(1) brightness(.45)"></div>' +
+        this.enemyPortraitHtml(entry.key, { discovered: false, detail: true }) +
         '<div><div class="bd-title">？？？</div>' +
         '<div class="bd-tags"><span class="bd-tag">未遭遇</span></div></div></div>' +
         '<div class="bd-desc">这种怪物尚未被记录。进入对应群系击败它即可解锁图鉴。</div>' +
@@ -1473,7 +1493,7 @@
       '<span class="bd-tag">' + esc((SP.BIOMES[def.biome] && SP.BIOMES[def.biome].name) || '') + '</span>';
     box.innerHTML =
       '<div class="bd-head">' +
-      '<div class="bd-portrait" style="background:' + esc(def.color || '#445') + '"></div>' +
+      this.enemyPortraitHtml(entry.key, { discovered: true, color: def.color, detail: true }) +
       '<div><div class="bd-title">' + esc(def.name) + '</div>' +
       '<div class="bd-tags">' + tags + '</div></div></div>' +
       '<div class="bd-desc">' + esc(def.desc || '暂无描述。') + '</div>' +

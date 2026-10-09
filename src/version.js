@@ -3,13 +3,23 @@
   'use strict';
   var SP = global.SP || (global.SP = {});
 
-  SP.VERSION = '2.6.0';
+  SP.VERSION = '2.7.0';
 
   /**
    * 更新日志：新版本写在数组前面。
    * items 用短句，界面与 CHANGELOG.md 共用同一套事实。
    */
   SP.CHANGELOG = [
+    {
+      version: '2.7.0',
+      date: '2026-10-09',
+      title: '怪物立绘',
+      items: [
+        '为全部 16 种怪物绘制 64×64 像素立绘',
+        '怪物图鉴列表与详情显示立绘；未遭遇仍保持「？？？」剪影',
+        '立绘随单文件包内嵌，离线双击亦可显示'
+      ]
+    },
     {
       version: '2.6.0',
       date: '2026-10-09',
