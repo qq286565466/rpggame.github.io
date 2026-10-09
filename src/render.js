@@ -433,29 +433,37 @@
     /* ---------------------------------------------------------- 普攻扇形 */
     this.drawAttackArc(ctx, world, S, opts);
 
-    /* ---------------------------------------------------------- 小领域圈 */
-    if (world.player && world.player.domainT > 0 && world.player.domainR > 0) {
-      var dp = S(world.player.x, world.player.y);
-      var pulseD = 0.55 + Math.sin(this.t * 5.5) * 0.12;
+    /* ---------------------------------------------------------- 小领域圈（全体玩家） */
+    var plist = world.players || (world.player ? [world.player] : []);
+    for (var di = 0; di < plist.length; di++) {
+      var dpl = plist[di];
+      if (!(dpl && dpl.domainT > 0 && dpl.domainR > 0)) continue;
+      var dp = S(dpl.x, dpl.y);
+      var pulseD = 0.55 + Math.sin(this.t * 5.5 + di) * 0.12;
       ctx.save();
       ctx.globalAlpha = 0.16 + pulseD * 0.1;
       ctx.fillStyle = 'rgba(160,100,255,0.35)';
       ctx.beginPath();
-      ctx.arc(dp.x, dp.y, world.player.domainR, 0, TAU);
+      ctx.arc(dp.x, dp.y, dpl.domainR, 0, TAU);
       ctx.fill();
       ctx.globalAlpha = 0.55 + pulseD * 0.25;
       ctx.strokeStyle = '#d8b4ff';
       ctx.lineWidth = 2.4;
       ctx.setLineDash([8, 6]);
       ctx.beginPath();
-      ctx.arc(dp.x, dp.y, world.player.domainR, 0, TAU);
+      ctx.arc(dp.x, dp.y, dpl.domainR, 0, TAU);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
     }
 
-    /* ---------------------------------------------------------- 玩家 */
-    this.drawPlayer(ctx, world, S, opts);
+    /* ---------------------------------------------------------- 玩家（组队时先画同伴） */
+    var focusId = world.localId || (world.player && world.player.id);
+    for (var ai = 0; ai < plist.length; ai++) {
+      if (plist[ai].id === focusId) continue;
+      this.drawCombatant(ctx, world, S, plist[ai], { ally: true });
+    }
+    if (world.player) this.drawPlayer(ctx, world, S, opts);
 
     /* ---------------------------------------------------------- 特效 */
     for (var fi = 0; fi < world.fx.length; fi++) {
@@ -600,10 +608,34 @@
   };
 
   /* ------------------------------------------------------------ 玩家（小猪） */
+  /** 绘制任意战斗员；ally 时加名牌与青色描边 */
+  Renderer.prototype.drawCombatant = function (ctx, world, S, p, opts) {
+    opts = opts || {};
+    if (!p) return;
+    var prev = world.player;
+    world.player = p;
+    this.drawPlayer(ctx, world, S, opts);
+    world.player = prev;
+    if (opts.ally && p.hp > 0) {
+      var sp = S(p.x, p.y);
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = 'rgba(8,6,16,0.6)';
+      var label = (p.name || '同伴') + ' ' + Math.max(0, Math.round(p.hp));
+      var tw = ctx.measureText(label).width + 8;
+      roundRect(ctx, sp.x - tw / 2, sp.y - (p.r || 18) - 28, tw, 15, 5);
+      ctx.fill();
+      ctx.fillStyle = '#a8f0ff';
+      ctx.fillText(label, sp.x, sp.y - (p.r || 18) - 16);
+    }
+  };
+
   Renderer.prototype.drawPlayer = function (ctx, world, S, opts) {
     var p = world.player;
+    if (!p) return;
     var sp = S(p.x, p.y);
-    var dead = world.dead;
+    var dead = world.dead || p.hp <= 0;
     var moving = SP.len(p.vx, p.vy) > 12;
     var walkBob = Math.sin((p.walkPhase || 0)) * (moving ? 1.35 : 0);
     // 静止时用呼吸待机；走动时减弱待机、叠加步伐起伏
@@ -1161,33 +1193,19 @@
       this.drawNpc(ctx, npc, np.x, np.y, isNear, t);
     }
 
-    /* 玩家（与战斗共用角色立绘 + 待机） */
-    var pl = S(h.player.x, h.player.y);
-    var pMoving = SP.len(h.player.vx, h.player.vy) > 12;
-    var pBreath = Math.sin(t * 2.15);
-    var pShadow = 1 + pBreath * 0.08 * (pMoving ? 0.35 : 1);
-    var hubHeroSz = Math.round(Math.max(72, (h.player.r || 17) * 4.2));
-    var hubWalkBob = Math.sin(h.player.walkPhase || 0) * (pMoving ? 1.35 : 0);
-    var hubIdleE = pMoving ? 0.35 : 1;
-    var hubIdleBob = Math.sin(t * 2.15) * 1.1 * hubIdleE
-      + Math.sin(t * 4.3) * 0.25 * hubIdleE;
-    ctx.globalAlpha = 0.4;
-    ctx.fillStyle = '#000';
-    ellipse(ctx, pl.x + 2, pl.y + hubWalkBob + hubIdleBob + hubHeroSz * 0.22,
-      hubHeroSz * 0.30 * pShadow, hubHeroSz * 0.12 * (2 - pShadow)); ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.save();
-    ctx.translate(pl.x, pl.y);
-    ctx.translate(0, hubWalkBob);
-    this.charIdlePose(ctx, t, 0.4, hubIdleE);
-    // 藏身处绕身体中心朝向移动方向
-    ctx.rotate(h.player.facing + Math.PI / 2);
-    if (!this.drawCharIcon(ctx, 'hero', 0, 0, hubHeroSz)) {
-      SP.Renderer.prototype.drawPigBody.call(this, ctx, {
-        walkPhase: h.player.walkPhase, vx: h.player.vx, vy: h.player.vy, hurtFlash: 0
-      }, null, 1);
+    /* 联机同伴（先画，本地玩家盖在上面） */
+    var remotes = h.remoteList ? h.remoteList() : [];
+    for (var ri = 0; ri < remotes.length; ri++) {
+      var rp = remotes[ri];
+      if (rp.inDungeon) continue;
+      this.drawHideoutAvatar(ctx, S, rp, t, {
+        tint: 'rgba(127,227,255,0.55)',
+        label: (rp.name || '旅人') + ' Lv.' + (rp.level || 1)
+      });
     }
-    ctx.restore();
+
+    /* 本地玩家（与战斗共用角色立绘 + 待机） */
+    this.drawHideoutAvatar(ctx, S, h.player, t, { label: null, local: true });
 
     /* 交互提示环 */
     if (h.nearby) {
@@ -1216,6 +1234,54 @@
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, W, H);
     void self;
+  };
+
+  /** 藏身处玩家/同伴立绘 */
+  Renderer.prototype.drawHideoutAvatar = function (ctx, S, ent, t, opts) {
+    opts = opts || {};
+    var pl = S(ent.x, ent.y);
+    var pMoving = SP.len(ent.vx || 0, ent.vy || 0) > 12;
+    var pBreath = Math.sin(t * 2.15 + (opts.local ? 0 : 1.7));
+    var pShadow = 1 + pBreath * 0.08 * (pMoving ? 0.35 : 1);
+    var hubHeroSz = Math.round(Math.max(72, (ent.r || 17) * 4.2));
+    var hubWalkBob = Math.sin(ent.walkPhase || 0) * (pMoving ? 1.35 : 0);
+    var hubIdleE = pMoving ? 0.35 : 1;
+    var hubIdleBob = Math.sin(t * 2.15) * 1.1 * hubIdleE
+      + Math.sin(t * 4.3) * 0.25 * hubIdleE;
+    if (opts.tint) {
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = opts.tint;
+      ctx.beginPath();
+      ctx.arc(pl.x, pl.y + hubWalkBob * 0.2, hubHeroSz * 0.42, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#000';
+    ellipse(ctx, pl.x + 2, pl.y + hubWalkBob + hubIdleBob + hubHeroSz * 0.22,
+      hubHeroSz * 0.30 * pShadow, hubHeroSz * 0.12 * (2 - pShadow)); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.save();
+    ctx.translate(pl.x, pl.y);
+    ctx.translate(0, hubWalkBob);
+    this.charIdlePose(ctx, t, 0.4, hubIdleE);
+    ctx.rotate((ent.facing || 0) + Math.PI / 2);
+    if (!this.drawCharIcon(ctx, 'hero', 0, 0, hubHeroSz)) {
+      SP.Renderer.prototype.drawPigBody.call(this, ctx, {
+        walkPhase: ent.walkPhase || 0, vx: ent.vx || 0, vy: ent.vy || 0, hurtFlash: 0
+      }, null, 1);
+    }
+    ctx.restore();
+    if (opts.label) {
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = 'rgba(8,6,16,0.65)';
+      var tw = ctx.measureText(opts.label).width + 10;
+      roundRect(ctx, pl.x - tw / 2, pl.y - hubHeroSz * 0.55 - 16, tw, 16, 6);
+      ctx.fill();
+      ctx.fillStyle = opts.tint ? '#c8f0ff' : '#ffe9a8';
+      ctx.fillText(opts.label, pl.x, pl.y - hubHeroSz * 0.55 - 3);
+    }
   };
 
   /** 藏身处的装饰物 */
