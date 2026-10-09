@@ -37,6 +37,8 @@ test('新角色：1 级、空背包、空装备、初始牛排', () => {
   I.EQUIP_SLOTS.forEach((s) => assert.equal(ch.equipped[s], null));
   assert.deepEqual(P.unlockedBiomes(ch), ['camp']);
   assert.equal(P.maxFloor(ch, 'camp'), 1);
+  assert.deepEqual(ch.bestiary, {});
+  assert.deepEqual(P.bestiaryProgress(ch), { found: 0, total: Object.keys(SP.ENEMY_TYPES).length });
 });
 
 test('旧版生存存档可迁移：保留货币，折算材料，送起手武器', () => {
@@ -272,7 +274,8 @@ test('结算入账：货币材料战利品与进度一并写入', () => {
   const loot = [item(20, 'weapon', 81), item(20, 'helm', 82)];
   const summary = {
     biome: 'camp', floor: 3, cleared: true, kills: 40, coins: 260, stones: 5,
-    upStones: 7, reStones: 2, loot: loot
+    upStones: 7, reStones: 2, loot: loot,
+    killsByKey: { calf: { kills: 30, elites: 2 }, alpha: { kills: 1, elites: 0 } }
   };
   const res = P.bankRun(ch, summary);
   assert.equal(ch.coins, 260);
@@ -287,12 +290,39 @@ test('结算入账：货币材料战利品与进度一并写入', () => {
   assert.equal(res.lootAdded, 2);
   assert.deepEqual(res.unlocked, ['camp', 'forest'], '通关营地 3 层后森林应已解锁');
   assert.equal(ch.stats.bestFloor.camp, 3);
+  assert.equal(ch.bestiary.calf.kills, 30);
+  assert.equal(ch.bestiary.calf.elites, 2);
+  assert.equal(ch.bestiary.alpha.kills, 1);
+  assert.ok(P.isDiscovered(ch, 'calf'));
+  assert.equal(P.isDiscovered(ch, 'queen'), false);
+  assert.equal(res.bestiaryFound, 2);
 
   const death = { biome: 'forest', floor: 1, cleared: false, kills: 12, coins: 30, stones: 0, upStones: 1, reStones: 0, loot: [] };
   P.bankRun(ch, death);
   assert.equal(ch.stats.deaths, 1);
   assert.equal(ch.progress.forest, 0, '未通关不应推进进度');
   assert.equal(ch.stats.runs, 2);
+});
+
+test('图鉴：normalize 清洗坏数据，catalog 覆盖全部群系', () => {
+  const ch = P.normalize({
+    name: '图鉴猪',
+    bestiary: {
+      calf: { kills: '12', elites: 1 },
+      nope: { kills: 9 },
+      bat: { kills: 0, elites: 0 }
+    }
+  });
+  assert.equal(ch.bestiary.calf.kills, 12);
+  assert.equal(ch.bestiary.calf.elites, 1);
+  assert.equal(ch.bestiary.nope, undefined);
+  assert.equal(ch.bestiary.bat, undefined);
+  const catalog = P.bestiaryCatalog(ch);
+  assert.equal(catalog.length, 4);
+  assert.equal(catalog.reduce((n, g) => n + g.entries.length, 0), Object.keys(SP.ENEMY_TYPES).length);
+  const camp = catalog.find((g) => g.biome === 'camp');
+  assert.ok(camp.entries.find((e) => e.key === 'calf').discovered);
+  assert.ok(!camp.entries.find((e) => e.key === 'bat').discovered);
 });
 
 test('通关营地 3 层后森林解锁', () => {

@@ -25,8 +25,69 @@
       inventory: [],
       progress: { camp: 0, forest: 0, cave: 0, nest: 0 },
       stats: { runs: 0, clears: 0, deaths: 0, bestFloor: {} , kills: 0, lootFound: 0 },
+      bestiary: {},
       created: Date.now()
     };
+  }
+
+  /** 把本局击杀并入图鉴：{ [enemyKey]: { kills, elites } } */
+  function mergeBestiary(ch, killsByKey) {
+    if (!ch || !killsByKey) return;
+    if (!ch.bestiary || typeof ch.bestiary !== 'object') ch.bestiary = {};
+    Object.keys(killsByKey).forEach(function (key) {
+      if (!SP.ENEMY_TYPES[key]) return;
+      var src = killsByKey[key] || {};
+      var addK = Math.max(0, Math.round(Number(src.kills) || 0));
+      var addE = Math.max(0, Math.round(Number(src.elites) || 0));
+      if (addK <= 0 && addE <= 0) return;
+      var dst = ch.bestiary[key];
+      if (!dst) {
+        dst = ch.bestiary[key] = { kills: 0, elites: 0, firstAt: Date.now() };
+      }
+      dst.kills = Math.max(0, Math.round(Number(dst.kills) || 0)) + addK;
+      dst.elites = Math.max(0, Math.round(Number(dst.elites) || 0)) + addE;
+      if (!dst.firstAt) dst.firstAt = Date.now();
+    });
+  }
+
+  function isDiscovered(ch, key) {
+    var e = ch && ch.bestiary && ch.bestiary[key];
+    return !!(e && ((e.kills || 0) > 0 || (e.elites || 0) > 0));
+  }
+
+  /** 图鉴进度：已发现数 / 总数 */
+  function bestiaryProgress(ch) {
+    var total = 0, found = 0;
+    Object.keys(SP.ENEMY_TYPES || {}).forEach(function (key) {
+      total++;
+      if (isDiscovered(ch, key)) found++;
+    });
+    return { found: found, total: total };
+  }
+
+  /** 按群系整理图鉴条目（含未解锁占位） */
+  function bestiaryCatalog(ch) {
+    var out = [];
+    (SP.BIOME_ORDER || []).forEach(function (biomeKey) {
+      var biome = SP.BIOMES[biomeKey];
+      if (!biome) return;
+      var keys = [biome.enemies.melee, biome.enemies.charger, biome.enemies.ranged, biome.enemies.boss];
+      var entries = keys.map(function (key) {
+        var def = SP.ENEMY_TYPES[key];
+        var rec = (ch && ch.bestiary && ch.bestiary[key]) || null;
+        var discovered = !!(rec && ((rec.kills || 0) > 0 || (rec.elites || 0) > 0));
+        return {
+          key: key,
+          def: def,
+          discovered: discovered,
+          kills: discovered ? (rec.kills || 0) : 0,
+          elites: discovered ? (rec.elites || 0) : 0,
+          firstAt: discovered ? (rec.firstAt || 0) : 0
+        };
+      });
+      out.push({ biome: biomeKey, name: biome.name, entries: entries });
+    });
+    return out;
   }
 
   /** 旧版（生存竞技）存档迁移：保留货币与牛排，其余转为材料起步 */
@@ -260,6 +321,7 @@
     ch.kills = (ch.kills || 0) + (summary.kills || 0);
     ch.stats.runs = (ch.stats.runs || 0) + 1;
     ch.stats.kills = (ch.stats.kills || 0) + (summary.kills || 0);
+    mergeBestiary(ch, summary.killsByKey);
     if (summary.cleared) {
       ch.stats.clears = (ch.stats.clears || 0) + 1;
       ch.progress[summary.biome] = Math.max(clearedFloor(ch, summary.biome), summary.floor);
@@ -269,12 +331,15 @@
       ch.stats.deaths = (ch.stats.deaths || 0) + 1;
     }
     var res = addLoot(ch, summary.loot);
+    var prog = bestiaryProgress(ch);
     return {
       coins: summary.coins || 0, stones: summary.stones || 0,
       upStones: summary.upStones || 0, reStones: summary.reStones || 0,
       lootAdded: res.added, overflow: res.overflow.length,
       cleared: !!summary.cleared,
-      unlocked: unlockedBiomes(ch)
+      unlocked: unlockedBiomes(ch),
+      bestiaryFound: prog.found,
+      bestiaryTotal: prog.total
     };
   }
 
@@ -330,6 +395,22 @@
     ['runs', 'clears', 'deaths', 'kills', 'lootFound'].forEach(function (k) {
       ch.stats[k] = Math.max(0, Math.round(num(ch.stats[k])));
     });
+    // 图鉴：清洗未知键与非数字计数
+    var rawB = (ch.bestiary && typeof ch.bestiary === 'object') ? ch.bestiary : {};
+    var cleanB = {};
+    Object.keys(rawB).forEach(function (key) {
+      if (!SP.ENEMY_TYPES[key]) return;
+      var rec = rawB[key] || {};
+      var kills = Math.max(0, Math.round(num(rec.kills)));
+      var elites = Math.max(0, Math.round(num(rec.elites)));
+      if (kills <= 0 && elites <= 0) return;
+      cleanB[key] = {
+        kills: kills,
+        elites: elites,
+        firstAt: Math.max(0, Math.round(num(rec.firstAt, Date.now())))
+      };
+    });
+    ch.bestiary = cleanB;
     // 丢弃结构损坏的装备，避免后续计算炸掉
     ch.inventory = ch.inventory.filter(function (it) { return validItem(it); });
     I.EQUIP_SLOTS.forEach(function (s) {
@@ -372,6 +453,10 @@
     maxFloor: maxFloor,
     bankRun: bankRun,
     buySteak: buySteak,
-    buyMysteryItem: buyMysteryItem
+    buyMysteryItem: buyMysteryItem,
+    mergeBestiary: mergeBestiary,
+    isDiscovered: isDiscovered,
+    bestiaryProgress: bestiaryProgress,
+    bestiaryCatalog: bestiaryCatalog
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

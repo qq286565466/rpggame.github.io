@@ -154,6 +154,7 @@
         if (k === 'b') { ui.togglePanel('bag'); return; }
         if (k === 'p') { ui.togglePanel('portal'); return; }
         if (k === 'v') { ui.togglePanel('record'); return; }
+        if (k === 'g') { ui.togglePanel('bestiary'); return; }
         if (k === 'h') { ui.togglePanel('help'); return; }
         if (k === 'escape' && ui.isPanelOpen()) { ui.closeAllPanels(); return; }
         return;
@@ -601,10 +602,21 @@
           }));
         }
         ui.enterHub();
-        // 支持 #dev-hub:bag / :forge / :shop / :portal 直接打开某个面板（截图用）
+        // 支持 #dev-hub:bag / :forge / :shop / :portal / :bestiary 直接打开某个面板（截图用）
         var sub = hash.split(':')[1];
         if (sub) {
           if (sub === 'forge') ui.selUid = hubCh.equipped.weapon ? hubCh.equipped.weapon.uid : null;
+          if (sub === 'bestiary') {
+            P.mergeBestiary(hubCh, {
+              calf: { kills: 42, elites: 3 },
+              charger: { kills: 18, elites: 1 },
+              bat: { kills: 11, elites: 0 },
+              alpha: { kills: 2, elites: 0 },
+              sporeling: { kills: 9, elites: 0 },
+              thornbeast: { kills: 4, elites: 1 },
+              queen: { kills: 1, elites: 1 }
+            });
+          }
           ui.openPanel(sub);
         }
       } else if (hash === 'dev-loot') {
