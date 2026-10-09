@@ -11,9 +11,10 @@ export function embedIcons(root) {
   const entries = files.map((f) => {
     const key = f.slice('icon-'.length, -'.png'.length);
     const b64 = fs.readFileSync(path.join(dir, f)).toString('base64');
-    return '    ' + key + ": 'data:image/png;base64," + b64 + "'";
+    // 键名可能含连字符（如 mob-calf），统一用引号包起来
+    return "    '" + key + "': 'data:image/png;base64," + b64 + "'";
   });
-  const js = `/* 时空猪 · 装备像素图标。由 tools/embed-icons.mjs 根据 assets/icons 生成。 */
+  const js = `/* 时空猪 · 像素图标。由 tools/embed-icons.mjs 根据 assets/icons 生成。 */
 (function (global) {
   'use strict';
   var SP = global.SP || (global.SP = {});
@@ -45,12 +46,26 @@ ${entries.join(',\n')}
     if (item && item.slot && FALLBACK[item.slot]) return FALLBACK[item.slot];
     return null;
   }
+  /** 怪物图鉴：assets/icons/icon-mob-<enemyKey>.png */
+  function forEnemy(enemyKey) {
+    if (!enemyKey) return null;
+    var k = 'mob-' + enemyKey;
+    return URLS[k] ? k : null;
+  }
+  function enemyUrl(enemyKey) {
+    var k = forEnemy(enemyKey);
+    return k ? url(k) : null;
+  }
 
   if (typeof Image !== 'undefined') {
     Object.keys(URLS).forEach(function (k) { image(k); });
   }
 
-  SP.ItemIcons = { url: url, image: image, fallback: FALLBACK, forItem: forItem };
+  SP.ItemIcons = {
+    url: url, image: image, fallback: FALLBACK,
+    forItem: forItem, forEnemy: forEnemy, enemyUrl: enemyUrl
+  };
+  SP.EnemyIcons = { url: enemyUrl, forEnemy: forEnemy };
 })(typeof window !== 'undefined' ? window : globalThis);
 `;
   const out = path.join(root, 'src', 'icons.js');

@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 
 const root = path.resolve(import.meta.dirname, '..');
-for (const f of ['src/util.js', 'src/items.js', 'src/sim.js', 'src/progress.js']) {
+for (const f of ['src/util.js', 'src/items.js', 'src/sim.js', 'src/progress.js', 'src/icons.js']) {
   vm.runInThisContext(fs.readFileSync(path.join(root, f), 'utf8'), { filename: f });
 }
 const SP = globalThis.SP, I = SP.Items, P = SP.Progress;
@@ -377,6 +377,17 @@ test('图鉴：normalize 清洗坏数据，catalog 覆盖全部群系', () => {
   const camp = catalog.find((g) => g.biome === 'camp');
   assert.ok(camp.entries.find((e) => e.key === 'calf').discovered);
   assert.ok(!camp.entries.find((e) => e.key === 'bat').discovered);
+});
+
+test('怪物立绘：每种敌人都有 mob-<key> 图标', () => {
+  const keys = Object.keys(SP.ENEMY_TYPES);
+  assert.ok(keys.length >= 16);
+  assert.ok(SP.ItemIcons && typeof SP.ItemIcons.enemyUrl === 'function');
+  keys.forEach((key) => {
+    const url = SP.ItemIcons.enemyUrl(key);
+    assert.ok(url && url.indexOf('data:image/png') === 0, '缺少立绘：' + key);
+  });
+  assert.equal(SP.ItemIcons.enemyUrl('not-a-mob'), null);
 });
 
 test('装备图鉴：入账解锁型号与传说，normalize 回填旧档', () => {
