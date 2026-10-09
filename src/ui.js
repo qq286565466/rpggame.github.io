@@ -236,6 +236,7 @@
     /* ---- 选中物品的操作（强化 / 重铸 只在铁匠铺里提供） ---- */
     $('#actEquip').addEventListener('click', function () { self.actionEquip(); });
     $('#actUnequip').addEventListener('click', function () { self.actionUnequip(); });
+    $('#actLock').addEventListener('click', function () { self.actionToggleLock(); });
     $('#actSalvage').addEventListener('click', function () { self.actionSalvage(); });
     $('#actSell').addEventListener('click', function () { self.actionSell(); });
 
@@ -515,6 +516,7 @@
       var row = el('div', 'equip-slot' + (it ? '' : ' empty'));
       var rar = it ? I.RARITY_BY_KEY[it.rarity] : null;
       row.innerHTML =
+        (it && it.locked ? '<span class="lk" title="已上锁">锁</span>' : '') +
         (it && it.upgrade ? '<span class="es-up">+' + it.upgrade + '</span>' : '') +
         '<div class="es-kicker">' + SLOT_LABEL[slot] + '</div>' +
         '<div class="es-icon"' + (rar ? ' style="border-color:' + rar.color + ';color:' + rar.color + '"' : '') + '>' +
@@ -682,9 +684,11 @@
 
     list.forEach(function (it) {
       var rar = I.RARITY_BY_KEY[it.rarity];
-      var c = el('div', 'cell' + (self.selUid === it.uid ? ' sel' : '') + (self.itemIsUpgrade(it) ? ' better' : ''));
+      var c = el('div', 'cell' + (self.selUid === it.uid ? ' sel' : '') +
+        (self.itemIsUpgrade(it) ? ' better' : '') + (it.locked ? ' is-locked' : ''));
       c.style.borderColor = rar.color;
       c.innerHTML = '<div class="rar" style="background:' + rar.color + '"></div>' +
+        (it.locked ? '<span class="lk" title="已上锁">锁</span>' : '') +
         self.iconHtml(it) +
         '<span class="il">' + it.ilvl + '</span>' +
         (it.upgrade ? '<span class="up">+' + it.upgrade + '</span>' : '');
@@ -826,7 +830,7 @@
       var stacks = BAG_STACKS[cat] || [];
       var picked = null;
       for (var i = 0; i < stacks.length; i++) if (stacks[i].key === this.bagPick) picked = stacks[i];
-      ['actEquip', 'actUnequip', 'actSalvage', 'actSell'].forEach(function (id) {
+      ['actEquip', 'actUnequip', 'actLock', 'actSalvage', 'actSell'].forEach(function (id) {
         this.$(id).classList.add('hidden');
       }, this);
       this.$('selName').className = 'tiny' + (picked ? '' : ' muted');
@@ -842,8 +846,8 @@
     }
     if (!found) {
       this.$('selName').className = 'tiny muted';
-      this.$('selName').textContent = '点选一件装备，可以换上、分解或出售';
-      ['actEquip', 'actUnequip', 'actSalvage', 'actSell'].forEach(function (id) {
+      this.$('selName').textContent = '点选一件装备，可以换上、上锁、分解或出售';
+      ['actEquip', 'actUnequip', 'actLock', 'actSalvage', 'actSell'].forEach(function (id) {
         this.$(id).classList.add('hidden');
       }, this);
       return;
@@ -852,14 +856,20 @@
     var rar = I.RARITY_BY_KEY[it.rarity];
     this.$('selName').className = 'tiny';
     this.$('selName').innerHTML = '<span style="color:' + rar.color + '">' + esc(it.name) +
-      (it.upgrade ? ' +' + it.upgrade : '') + '</span> <span class="muted">· 战力 ' + I.power(it) + '</span>';
+      (it.upgrade ? ' +' + it.upgrade : '') + '</span> <span class="muted">· 战力 ' + I.power(it) + '</span>' +
+      (it.locked ? ' <span style="color:#ffd27a">· 已上锁</span>' : '');
     var inBag = found.where === 'inventory';
     this.$('actEquip').classList.toggle('hidden', !inBag);
     this.$('actUnequip').classList.toggle('hidden', inBag);
+    this.$('actLock').classList.remove('hidden');
+    this.$('actLock').textContent = it.locked ? '解锁' : '上锁';
+    this.$('actLock').classList.toggle('on', !!it.locked);
     this.$('actSalvage').classList.remove('hidden');
     this.$('actSell').classList.remove('hidden');
-    this.$('actSalvage').disabled = !inBag;
-    this.$('actSell').disabled = !inBag;
+    this.$('actSalvage').disabled = !inBag || !!it.locked;
+    this.$('actSell').disabled = !inBag || !!it.locked;
+    this.$('actSalvage').title = it.locked ? '装备已上锁' : '';
+    this.$('actSell').title = it.locked ? '装备已上锁' : '';
     // 强化 / 重铸 属于铁匠的活，只在铁匠铺面板里提供
   };
 
@@ -875,7 +885,8 @@
     html += '<div class="tt-top">' + this.iconHtml(item) + '<div class="tt-top-text">';
     html += '<div class="tt-name" style="color:' + rar.color + '">' + esc(item.name) + (item.upgrade ? ' +' + item.upgrade : '') + '</div>';
     html += '<div class="tt-sub">' + rar.name + ' · ' + I.SLOT_META[item.slot].name + ' · 物品等级 ' + item.ilvl +
-      (isEquipped ? ' · <b style="color:var(--cyan)">已装备</b>' : '') + '</div></div></div>';
+      (isEquipped ? ' · <b style="color:var(--cyan)">已装备</b>' : '') +
+      (item.locked ? ' · <b style="color:#ffd27a">已上锁</b>' : '') + '</div></div></div>';
     if (item.slot === 'weapon') {
       var wp = I.weaponProfile(item);
       html += '<div class="tt-sec"><div class="tt-line"><span>攻击方式</span><b style="color:#ffe9a8">' +
@@ -936,8 +947,14 @@
     }
     if (!isEquipped) {
       var y = I.salvageYield(item);
-      html += '<div class="tt-foot">分解可得 ' + y.stones + ' 强化石' + (y.rerolls ? ' + ' + y.rerolls + ' 重铸石' : '') +
-        ' · 售价 ' + I.sellPrice(item) + ' 金币</div>';
+      if (item.locked) {
+        html += '<div class="tt-foot" style="color:#ffd27a">已上锁：无法分解或出售</div>';
+      } else {
+        html += '<div class="tt-foot">分解可得 ' + y.stones + ' 强化石' + (y.rerolls ? ' + ' + y.rerolls + ' 重铸石' : '') +
+          ' · 售价 ' + I.sellPrice(item) + ' 金币</div>';
+      }
+    } else if (item.locked) {
+      html += '<div class="tt-foot" style="color:#ffd27a">已上锁：卸下后也无法被分解/出售</div>';
     }
     html += '<div class="tt-foot">战力评分 ' + I.power(item) + '</div>';
 
@@ -984,6 +1001,13 @@
     var delta = r.after - r.before;
     this.afterChange('重铸完成：战力 ' + r.before + ' → ' + r.after + '（' + (delta >= 0 ? '+' : '') + delta + '）');
   };
+  UI.prototype.actionToggleLock = function () {
+    var ch = Accounts.char();
+    var r = P.toggleLock(ch, this.selUid);
+    if (!r.ok) return this.flash(r.reason);
+    this.sound && this.sound.play('click');
+    this.afterChange(r.locked ? '已上锁，不会被分解或出售' : '已解锁');
+  };
   UI.prototype.actionSalvage = function () {
     var ch = Accounts.char();
     var r = P.salvage(ch, this.selUid);
@@ -1023,8 +1047,13 @@
     });
     if (threshold <= 0) return this.flash('请先装备一些物品，再按战力清理背包');
     var r = P.salvageBelow(ch, threshold);
-    if (!r.removed) return this.flash('没有需要清理的装备');
-    this.afterChange('分解了 ' + r.removed + ' 件装备，获得 ' + r.stones + ' 强化石 + ' + r.rerolls + ' 重铸石');
+    if (!r.removed) {
+      return this.flash(r.skippedLocked
+        ? '没有可清理的装备（上锁装备已跳过）'
+        : '没有需要清理的装备');
+    }
+    this.afterChange('分解了 ' + r.removed + ' 件装备，获得 ' + r.stones + ' 强化石 + ' + r.rerolls + ' 重铸石' +
+      (r.skippedLocked ? '（跳过 ' + r.skippedLocked + ' 件上锁）' : ''));
   };
 
   UI.prototype.afterChange = function (msg) {
@@ -1078,11 +1107,14 @@
       var rar = I.RARITY_BY_KEY[it.rarity];
       var node = el('div', 'forge-row' + (self.selUid === it.uid ? ' sel' : ''));
       node.innerHTML =
+        (it.locked ? '<span class="lk" title="已上锁">锁</span>' : '') +
         '<div class="fr-glyph" style="border-color:' + rar.color + ';color:' + rar.color + '">' +
         self.iconHtml(it) + '</div>' +
         '<div class="fr-body"><div class="fr-name" style="color:' + rar.color + '">' +
-        esc(it.name) + (it.upgrade ? ' +' + it.upgrade : '') + '</div>' +
+        esc(it.name) + (it.upgrade ? ' +' + it.upgrade : '') +
+        (it.locked ? ' <span style="color:#ffd27a;font-size:12px">锁</span>' : '') + '</div>' +
         '<div class="fr-sub">' + (row.where === 'equipped' ? '已装备 · ' : '') +
+        (it.locked ? '已上锁 · ' : '') +
         row.slotName + ' · ilvl ' + it.ilvl + ' · 战力 ' + I.power(it) + '</div></div>';
       node.addEventListener('click', function (ev) {
         ev.stopPropagation();
@@ -1132,12 +1164,25 @@
       reRow.appendChild(reBtn);
       body.appendChild(reRow);
 
+      var lockRow = el('div', 'shop-item');
+      lockRow.innerHTML = '<div class="si-body"><div class="si-name">' + (it.locked ? '解锁装备' : '上锁装备') + '</div>' +
+        '<div class="si-desc">' + (it.locked
+          ? '解锁后可以分解或出售'
+          : '上锁后不会被分解、出售或「分解垃圾」清掉') + '</div></div>';
+      var lockBtn = el('button', 'tiny-btn' + (it.locked ? '' : ' gold'), it.locked ? '解锁' : '上锁');
+      lockBtn.addEventListener('click', function () { self.actionToggleLock(); });
+      lockRow.appendChild(lockBtn);
+      body.appendChild(lockRow);
+
       if (found.where === 'inventory') {
         var y = I.salvageYield(it);
         var salRow = el('div', 'shop-item');
         salRow.innerHTML = '<div class="si-body"><div class="si-name">分解</div>' +
-          '<div class="si-desc">获得 ' + y.stones + ' 强化石' + (y.rerolls ? ' + ' + y.rerolls + ' 重铸石' : '') + '</div></div>';
+          '<div class="si-desc">' + (it.locked
+            ? '装备已上锁，请先解锁'
+            : ('获得 ' + y.stones + ' 强化石' + (y.rerolls ? ' + ' + y.rerolls + ' 重铸石' : ''))) + '</div></div>';
         var salBtn = el('button', 'tiny-btn', '分解');
+        salBtn.disabled = !!it.locked;
         salBtn.addEventListener('click', function () { self.actionSalvage(); });
         salRow.appendChild(salBtn);
         body.appendChild(salRow);
@@ -1150,7 +1195,7 @@
     // 批量清理
     var bulk = el('div', 'shop-item');
     bulk.innerHTML = '<div class="si-body"><div class="si-name">批量分解</div>' +
-      '<div class="si-desc">分解背包中战力低于「已装备最强者 80%」的装备</div></div>';
+      '<div class="si-desc">分解背包中战力低于「已装备最强者 80%」的装备（自动跳过上锁）</div></div>';
     var bulkBtn = el('button', 'tiny-btn', '执行');
     bulkBtn.addEventListener('click', function () { self.salvageJunk(); });
     bulk.appendChild(bulkBtn);

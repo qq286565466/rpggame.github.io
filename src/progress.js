@@ -250,11 +250,12 @@
     return { ok: true, item: item, before: before, after: after, cost: cost };
   }
 
-  /** 分解为材料；已装备的需先卸下 */
+  /** 分解为材料；已装备的需先卸下；上锁装备不可分解 */
   function salvage(ch, uid) {
     var idx = -1;
     for (var i = 0; i < ch.inventory.length; i++) if (ch.inventory[i].uid === uid) { idx = i; break; }
     if (idx < 0) return { ok: false, reason: '只能分解背包中的装备' };
+    if (ch.inventory[idx].locked) return { ok: false, reason: '装备已上锁，请先解锁' };
     var item = ch.inventory.splice(idx, 1)[0];
     var y = I.salvageYield(item);
     ch.materials.up += y.stones;
@@ -266,17 +267,34 @@
     var idx = -1;
     for (var i = 0; i < ch.inventory.length; i++) if (ch.inventory[i].uid === uid) { idx = i; break; }
     if (idx < 0) return { ok: false, reason: '只能出售背包中的装备' };
+    if (ch.inventory[idx].locked) return { ok: false, reason: '装备已上锁，请先解锁' };
     var item = ch.inventory.splice(idx, 1)[0];
     var price = I.sellPrice(item);
     ch.coins += price;
     return { ok: true, item: item, price: price };
   }
 
-  /** 批量分解所有「未装备且战力低于阈值」的装备（背包清理） */
+  /** 切换装备锁定；已装备与背包中的均可上锁 */
+  function toggleLock(ch, uid) {
+    var found = findItem(ch, uid);
+    if (!found) return { ok: false, reason: '找不到该装备' };
+    found.item.locked = !found.item.locked;
+    return { ok: true, item: found.item, locked: !!found.item.locked };
+  }
+
+  function setLocked(ch, uid, locked) {
+    var found = findItem(ch, uid);
+    if (!found) return { ok: false, reason: '找不到该装备' };
+    found.item.locked = !!locked;
+    return { ok: true, item: found.item, locked: !!found.item.locked };
+  }
+
+  /** 批量分解所有「未装备且战力低于阈值」的装备（背包清理）；跳过上锁 */
   function salvageBelow(ch, keepPower) {
-    var removed = 0, stones = 0, rerolls = 0;
+    var removed = 0, stones = 0, rerolls = 0, skippedLocked = 0;
     for (var i = ch.inventory.length - 1; i >= 0; i--) {
       var it = ch.inventory[i];
+      if (it.locked) { skippedLocked++; continue; }
       if (I.power(it) > keepPower) continue;
       var y = I.salvageYield(it);
       stones += y.stones; rerolls += y.rerolls;
@@ -285,7 +303,7 @@
     }
     ch.materials.up += stones;
     ch.materials.re += rerolls;
-    return { removed: removed, stones: stones, rerolls: rerolls };
+    return { removed: removed, stones: stones, rerolls: rerolls, skippedLocked: skippedLocked };
   }
 
   /* -------------------------------------------------------------- 副本进度 */
@@ -416,7 +434,16 @@
     I.EQUIP_SLOTS.forEach(function (s) {
       if (ch.equipped[s] && !validItem(ch.equipped[s])) ch.equipped[s] = null;
     });
+    ch.inventory.forEach(normalizeItemFlags);
+    I.EQUIP_SLOTS.forEach(function (s) {
+      if (ch.equipped[s]) normalizeItemFlags(ch.equipped[s]);
+    });
     return ch;
+  }
+
+  function normalizeItemFlags(it) {
+    if (!it) return;
+    it.locked = !!it.locked;
   }
 
   function validItem(it) {
@@ -446,6 +473,8 @@
     rerollItem: rerollItem,
     salvage: salvage,
     sell: sell,
+    toggleLock: toggleLock,
+    setLocked: setLocked,
     salvageBelow: salvageBelow,
     clearedFloor: clearedFloor,
     unlockedBiomes: unlockedBiomes,

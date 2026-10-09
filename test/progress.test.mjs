@@ -249,6 +249,60 @@ test('批量分解只清理低于阈值的装备', () => {
   assert.ok(res.stones > 0);
 });
 
+test('上锁：可切换锁定，阻止分解/出售，批量清理跳过', () => {
+  const ch = richChar();
+  const bag = item(20, 'weapon', 81);
+  const worn = item(20, 'helm', 82);
+  ch.inventory.push(bag);
+  ch.equipped.helm = worn;
+
+  assert.equal(!!bag.locked, false);
+  const t1 = P.toggleLock(ch, bag.uid);
+  assert.equal(t1.ok, true);
+  assert.equal(t1.locked, true);
+  assert.equal(bag.locked, true);
+
+  assert.equal(P.salvage(ch, bag.uid).ok, false, '上锁装备不可分解');
+  assert.equal(P.sell(ch, bag.uid).ok, false, '上锁装备不可出售');
+  assert.equal(ch.inventory.length, 1, '上锁后仍应留在背包');
+
+  const t2 = P.toggleLock(ch, worn.uid);
+  assert.equal(t2.ok, true);
+  assert.equal(worn.locked, true);
+
+  const set = P.setLocked(ch, bag.uid, false);
+  assert.equal(set.ok, true);
+  assert.equal(bag.locked, false);
+  assert.equal(P.salvage(ch, bag.uid).ok, true, '解锁后可分解');
+
+  const keep = item(5, 'ring', 83);
+  const junk = item(5, 'boot', 84);
+  keep.locked = true;
+  ch.inventory.push(keep, junk);
+  const before = ch.inventory.length;
+  const res = P.salvageBelow(ch, 1e9);
+  assert.ok(res.removed >= 1);
+  assert.ok(res.skippedLocked >= 1, '应报告跳过上锁件数');
+  assert.ok(ch.inventory.some((i) => i.uid === keep.uid), '上锁装备不能被批量分解');
+  assert.ok(!ch.inventory.some((i) => i.uid === junk.uid), '未上锁低战力应被清理');
+  assert.ok(ch.inventory.length < before);
+
+  assert.equal(P.toggleLock(ch, 'missing-uid').ok, false);
+  assert.equal(P.setLocked(ch, 'missing-uid', true).ok, false);
+});
+
+test('normalize 将 locked 规范为布尔值', () => {
+  const it = item(10, 'weapon', 91);
+  it.locked = 1;
+  const ch = P.normalize({
+    name: '锁猪',
+    inventory: [it],
+    equipped: { weapon: Object.assign({}, item(10, 'weapon', 92), { locked: 'yes' }) }
+  });
+  assert.equal(ch.inventory[0].locked, true);
+  assert.equal(ch.equipped.weapon.locked, true);
+});
+
 test('副本解锁按前一区域通关层数递进', () => {
   const ch = P.newCharacter();
   assert.deepEqual(P.unlockedBiomes(ch), ['camp']);
